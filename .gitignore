@@ -1,0 +1,79 @@
+# =============================================================================
+# Mini ERP Stock & Sales — .gitignore (PHP / CodeIgniter 3)
+# =============================================================================
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+.cursor/
+
+# --- Environment / secrets (never commit real credentials) ---
+.env
+.env.*
+!.env.example
+application/config/database.php
+application/config/config.php
+application/config/email.php
+
+# Keep example / template configs if present
+!application/config/*.php.example
+!application/config/*.php.dist
+
+# --- CodeIgniter logs & caches ---
+application/logs/*
+!application/logs/index.html
+application/cache/*
+!application/cache/index.html
+
+# --- Composer ---
+/vendor/
+composer.lock
+# Uncomment composer.lock tracking once dependency policy is decided:
+# !composer.lock
+
+# --- Uploads / generated / temp ---
+uploads/
+!uploads/.gitkeep
+tmp/
+temp/
+*.log
+*.tmp
+*.bak
+*.old
+
+# --- Database dumps with real data (keep schema scripts tracked) ---
+database/*.sql.gz
+database/*_dump.sql
+database/*_backup.sql
+!database/*.example.sql
+!database/schema*.sql
+!database/migrations/
+
+# --- Node (if tooling added later) ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# --- Local overrides ---
+*.local
+*.local.php
+phpunit.xml
+.phpunit.result.cache
+
+# --- Local file backups (keep out of Git) ---
+/backups/
+
+
+# --- Project documentation files ---
+Mini_ERP_Master_Project_Document_AR_v1.0*
+Mini_ERP_Master_Project_Document*
+docs/Mini_ERP_Master_Project_Document_AR_v1.0.docx
+docs/Mini_ERP_Master_Project_Document_AR_v1.0.md
+
