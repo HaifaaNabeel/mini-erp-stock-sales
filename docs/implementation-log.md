@@ -640,3 +640,240 @@
 - **ما لم يتم:** لم يتم تنفيذ Commit أو Push أو Merge، ولم يتم تعديل `MASTER_PROJECT_DOCUMENT_AR.md` أو `decisions.md` أو أي ملف داخل `system/`.
 - **الخطوة المطلوبة من مالك المشروع:** مراجعة الملف، ثم حفظ Commit الخاص بتغييرات F04 وسجل التنفيذ بعد التأكد من قائمة الملفات الداخلة في Commit.
 - **المرحلة التالية:** F05 — Warehouse Stock، وتبدأ بعد اعتماد F04.
+
+
+---
+
+## F05 — Warehouse Stock Management
+
+**تاريخ التنفيذ:** 2026-10-31
+**الفرع:** `feature/F05-warehouse-stock-management`
+**الحالة عند الانتهاء:** ✅ مكتمل — جاهز للمراجعة
+
+---
+
+### 1. الهدف
+
+إنشاء أساس إدارة أرصدة المخزون داخل المستودعات، بحيث يكون لكل منتج رصيد مستقل في كل مستودع. المرحلة تؤسس طبقة مركزية للقراءة تُستخدم في المراحل اللاحقة، ولا تشمل عمليات إدخال/إخراج المخزون الفعلية.
+
+---
+
+### 2. نطاق العمل والمتطلبات المغطاة
+
+- إنشاء جدول `warehouse_stock` مع جميع القيود والفهارس.
+- ترحيل `reorder_level` من المستوى العام للمنتج إلى المستوى المستقل لكل مستودع.
+- إنشاء طبقة مركزية `Stock_model` لإدارة قراءة الأرصدة.
+- واجهة عرض المخزون مع بحث وتصفية وPagination.
+- تطبيق الصلاحيات حسب الأدوار (Admin/Warehouse/Sales).
+- إصلاح تحذير PHP 8.2 في نظام الترقيم (`MY_Pagination`).
+- إصلاح خطأ `$total_count` في صفحة المنتجات.
+- توحيد Sidebar وإضافة رابط نشط لـ F05.
+
+---
+
+### 3. القرارات المعتمدة خلال المرحلة
+
+| القرار | السبب |
+|---|---|
+| استراتيجية الإنشاء عند الحاجة (Lazy Creation) | إضافة منتج جديد تسجله في الكتالوج فقط، ولا يُنشأ سجل في warehouse_stock إلا عند الحاجة الفعلية لمنتج ومستودع محددين (عبر get_or_create عند تعديل حد الطلب أو مع حركات المخزون لاحقًا). السجلات الـ22 الحالية هي نتاج تهيئة أولية لبيانات F04 السابقة وليست توزيعًا تلقائيًا عند إنشاء المنتجات |
+| `get_or_create()` لتهيئة سجلات جديدة بأمان عند الحاجة | منع التكرار وضمان الذرية (Atomic) عند الحاجة لإنشاء سجل لزوج محدد (منتج ومستودع) |
+| الإبقاء على `products.reorder_level` بدون حذف | لا تزال تستخدمه Controllers وViews الخاصة بـ F04؛ لا يُحذف حتى إزالة جميع الاعتماديات |
+| `shortage` لا تُخزن كعمود — تُحسب لحظيًا | تجنب التزامن وإبقاء البيانات متسقة |
+| `Stock` controller يرث `Auth_Controller` | الحماية من الدخول غير المصرح مع التوافق مع نمط المشروع |
+| تصفية المستودعات في Model layer وليس Controller فقط | مركزية الأمان ومنع تجاوز الصلاحيات |
+
+---
+
+### 4. الملفات الجديدة والمعدلة
+
+#### أ. الملفات الجديدة المنشأة خصيصًا لـ F05:
+
+| الملف | الدور |
+|---|---|
+| `application/controllers/Stock.php` | Controller رئيسي — يعرض المخزون ويدير edit_reorder حسب الصلاحيات |
+| `application/models/Stock_model.php` | طبقة مركزية — قراءة الأرصدة، get_or_create، calculate_shortage، count_low_stock |
+| `application/views/stock/index.php` | واجهة قائمة المخزون — بحث وتصفية وPagination وعرض النقص |
+| `application/views/stock/edit_reorder.php` | نموذج تعديل حد إعادة الطلب لكل منتج/مستودع |
+| `database/schema_f05_stock.sql` | سكريبت إنشاء جدول warehouse_stock والفهارس والمفاتيح الأجنبية وقيود CHECK |
+
+*ملاحظة توضيحية حول الملفات السابقة:* ملف `application/libraries/MY_Pagination.php` أُنشئ سابقًا ضمن تصحيحات F04 اللاحقة (F04 Fixes) لحل تحذير PHP 8.2، وتم تأكيد توافقه واستخدامه في F05 دون إعادة إنشائه.
+
+---
+
+### 5. الملفات المعدلة في F05
+
+| الملف | التغيير |
+|---|---|
+| `application/config/routes.php` | إضافة مسارات: `stock` و `stock/edit_reorder/(:num)` |
+| `application/views/layouts/main.php` | تحويل رابط F05 من placeholder معطل إلى رابط نشط يشير إلى `stock` |
+
+*ملاحظة:* التعديل على `application/controllers/Products.php` بإضافة `$data['total_count']` كان قد نُفذ ضمن إصلاحات F04 الموضعية السابقة.
+
+---
+
+### 6. تغييرات قاعدة البيانات
+
+**جدول جديد:** `warehouse_stock`
+
+- **الأعمدة:** `id`, `warehouse_id`, `product_id`, `quantity` (INT DEFAULT 0), `reorder_level` (INT DEFAULT 0), `created_at`, `updated_at`.
+- **القيود:**
+  - `PRIMARY KEY (id)`
+  - `UNIQUE KEY uk_warehouse_product (warehouse_id, product_id)`
+  - `CONSTRAINT fk_ws_warehouse_id FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE RESTRICT`
+  - `CONSTRAINT fk_ws_product_id FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT`
+  - `CONSTRAINT chk_ws_quantity_nonneg CHECK (quantity >= 0)` (منع الكميات السالبة)
+  - `CONSTRAINT chk_ws_reorder_nonneg CHECK (reorder_level >= 0)` (منع حد إعادة الطلب السالب)
+- **المحرك والترميز:** InnoDB / utf8mb4 / utf8mb4_unicode_ci.
+
+**التهيئة المبدئية لبيانات F04 القائمة:**
+تمت تهيئة 22 سجلًا لمرة واحدة فقط (2 مستودعات × 11 منتجًا موجودين من F04) بقيم صفرية مبدئية لحد إعادة الطلب والكمية، لربط كتالوج F04 القائم بجدول الأرصدة. هذه السجلات تمثل تهيئة بيانات أولية سابقة وليست سلوك النظام عند إضافة منتجات جديدة؛ فالنظام يعتمد حصريًا سياسة الإنشاء عند الحاجة (Lazy Creation).
+
+**ملف SQL:** `database/schema_f05_stock.sql`
+
+---
+
+### 7. نتائج التشغيل الأولي للاختبارات الوظيفية (Initial Verification Run — 38/38 PASSED)
+
+تم تنفيذ 38 اختبارًا وظيفيًا وقاعديًا عبر `test_f05_functional.php` (تم حذفه بعد التشغيل).
+**تاريخ التشغيل:** 2026-10-30 23:06:01
+**النتيجة الإجمالية:** 38 PASSED | 0 FAILED
+
+| # | الاختبار | النوع | النتيجة |
+|---|---|---|---|
+| T01 | جدول warehouse_stock موجود | DB | PASS |
+| T02 | جميع الأعمدة المطلوبة موجودة | DB | PASS |
+| T03 | مفتاح uk_warehouse_product الفريد موجود | DB | PASS |
+| T04 | FK warehouse_id → warehouses | DB | PASS |
+| T05 | FK product_id → products | DB | PASS |
+| T06 | محرك InnoDB | DB | PASS |
+| T07 | ترميز utf8mb4 | DB | PASS |
+| T08 | القيمة الافتراضية لـ quantity = 0 | DB | PASS |
+| T09 | القيمة الافتراضية لـ reorder_level = 0 | DB | PASS |
+| T10 | 22 سجلًا في warehouse_stock (Count=22) | DB | PASS |
+| T11 | جميع الكميات = 0 (الحالة الأولية) | DB | PASS |
+| T12 | جميع reorder_levels = 0 | DB | PASS |
+| T13 | منع التكرار بالمفتاح الفريد | DB | PASS |
+| T14 | نفس المنتج له سجل مستقل في كل مستودع | DB | PASS |
+| T15 | products.reorder_level لا يزال موجودًا (قرار الإبقاء) | DB | PASS |
+| T16 | shortage(20,10) = 0 | Logic | PASS |
+| T17 | shortage(10,10) = 0 | Logic | PASS |
+| T18 | shortage(5,10) = 5 | Logic | PASS |
+| T19 | shortage(0,10) = 10 | Logic | PASS |
+| T20 | shortage(20,0) = 0 | Logic | PASS |
+| T21 | shortage غير مخزن كعمود في warehouse_stock | Logic | PASS |
+| T22 | لا صفوف orphan في warehouse_id | DB | PASS |
+| T23 | لا صفوف orphan في product_id | DB | PASS |
+| T24 | ملف schema_f05_stock.sql موجود | Migration | PASS |
+| T25 | reorder_level منقول بشكل صحيح (كلاهما 0، Mismatches=0) | Migration | PASS |
+| T26 | application/controllers/Stock.php موجود | Files | PASS |
+| T27 | application/models/Stock_model.php موجود | Files | PASS |
+| T28 | application/views/stock/index.php موجود | Files | PASS |
+| T29 | application/views/stock/edit_reorder.php موجود | Files | PASS |
+| T30 | application/libraries/MY_Pagination.php موجود | Files | PASS |
+| T31 | routes.php يحتوي مسار stock | Routes | PASS |
+| T32 | routes.php يحتوي stock/edit_reorder | Routes | PASS |
+| T33 | Sidebar يحتوي رابط stock نشط | Sidebar | PASS |
+| T34 | Placeholder المعطل لـ F05 أُزيل | Sidebar | PASS |
+| T35 | Stock يرث Auth_Controller | Security | PASS |
+| T36 | Stock_model لديه get_or_create() | Logic | PASS |
+| T37 | Stock_model لديه calculate_shortage() | Logic | PASS |
+| T38 | MY_Pagination يرث CI_Pagination | Compat | PASS |
+
+---
+
+### 8. اختبارات لم تُنفذ في التشغيل الأولي وأسبابها
+
+| الاختبار | السبب |
+|---|---|
+| اختبار HTTP Authorization عبر curl (Admin/Warehouse/Sales) | يتطلب جلسة HTTP نشطة — غير متاح عبر CLI في CI3 |
+| اختبار البحث والتصفية وPagination عبر HTTP | نفس السبب — يتطلب متصفحًا |
+| منع الكميات السالبة على مستوى DB (CHECK constraint) | أُجّل في التشغيل الأولي، ثم تم تنفيذه لاحقًا في جلسة الفحص النهائي بإضافة chk_ws_* واختُبر بنجاح |
+| اختبارات التزامن (Concurrency) | تتطلب بيئة اختبار متعددة الطلبات متزامنة |
+
+---
+
+### 9. المشكلات التي ظهرت وكيفية معالجتها
+
+| المشكلة | الحل |
+|---|---|
+| اسم قاعدة البيانات في سكريبت الاختبار خاطئ (mini_erp) | اكتشاف الاسم الصحيح `mini_erp_stock_sales` من ملف database.php |
+| `ctype_digit(null)` في PHP 8.2 — Severity 8192 في CI_Pagination | استخدام MY_Pagination (المنشأ سابقًا في F04 Fixes) لضبط cur_page = '1' عند null |
+| `Undefined variable $total_count` في products/index.php | تم التحقق من معالجته السابقة في Products::index() بضبط total_count |
+| PowerShell يكسر أوامر php -r مع نصوص عربية | استخدام ملفات PHP مؤقتة بدلًا من inline commands |
+| استبدال نص عربي في main.php عبر PowerShell فشل | استخدام PHP مع regex لاستبدال block الـ F05 القديم |
+
+---
+
+### 10. الأعمال المؤجلة والقيود المعروفة
+
+| العنصر | التصنيف | ملاحظة |
+|---|---|---|
+| قيود CHECK للقيم السالبة في DB | تم إنجازه وحسمه | أُضيفت قيود chk_ws_quantity_nonneg و chk_ws_reorder_nonneg بنجاح واختُبر رفض DB للمحاولات السالبة |
+| `products.reorder_level` لم يُحذف | قرار معتمد | يُحذف فقط بعد إزالة جميع الاعتماديات في F04 views وcontrollers |
+| تسجيل حركات المخزون الفعلية | مؤجل لـ F06 | F05 للقراءة فقط ولا تنفذ حركات إدخال أو إخراج |
+| عمليات الكتابة على الكميات | مؤجل لـ F06 | تُعدَّل عبر حركات المخزون المعتمدة في المراحل التالية |
+| اختبارات HTTP الآلية للجلسات | غير منفذة | تتطلب بيئة اختبار متكاملة بمتصفح |
+
+---
+
+### 11. حالة Git عند انتهاء المرحلة
+
+**الفرع:** `feature/F05-warehouse-stock-management`
+**حالة التغييرات:** جميع الملفات أدناه هي تغييرات محلية غير مثبتة (Uncommitted Changes)؛ **لم يُنفذ أي Commit أو Push أو Merge**.
+
+| الملف | الحالة |
+|---|---|
+| `application/config/routes.php` | Modified (M) |
+| `application/views/layouts/main.php` | Modified (M) |
+| `application/controllers/Stock.php` | Untracked (??) |
+| `application/models/Stock_model.php` | Untracked (??) |
+| `application/views/stock/` (المجلد بالكامل) | Untracked (??) |
+| `database/schema_f05_stock.sql` | Untracked (??) |
+
+---
+
+## F05 — تشغيل المراجعة النهائية الحرج (Final Critical Verification Run — 36/36 PASSED)
+
+**تاريخ التنفيذ:** 2026-10-31
+**الفرع:** `feature/F05-warehouse-stock-management`
+**طبيعة التشغيل:** جلسة تحقق ثانية مستقلة ركزت على فحص وإضافة قيود DB لمنع القيم السالبة، والتحقق الموضعي من الصلاحيات وسلامة المنطق.
+
+### الإصلاح المنفذ في قاعدة البيانات
+
+**المشكلة:** جدول `warehouse_stock` لم يحتوِ مبدئيًا على CHECK constraints لمنع القيم السالبة لـ `quantity` وَ `reorder_level`، وكانت الحماية محصورة على مستوى التطبيق (`is_natural`).
+
+**الإصلاح:** تمت إضافة CHECK constraints رسميًا عبر ALTER TABLE:
+
+```sql
+ALTER TABLE warehouse_stock
+    ADD CONSTRAINT chk_ws_quantity_nonneg  CHECK (quantity >= 0),
+    ADD CONSTRAINT chk_ws_reorder_nonneg   CHECK (reorder_level >= 0);
+```
+
+تم أيضًا تحديث `database/schema_f05_stock.sql` ليعكس هذه القيود في نص الإنشاء الأصلي.
+
+### نتائج الفحوصات النهائية للتشغيل الثاني (36/36 PASSED)
+
+**تاريخ التشغيل:** 2026-10-30 23:22:08
+
+| الفحص | النتيجة |
+|---|---|
+| سلامة قاعدة البيانات (Unique، FKs، CHECK constraints) | ✅ PASSED (8/8) |
+| صلاحيات الأدوار (code review) | ✅ PASSED (5/5) |
+| منطق reorder_level من warehouse_stock | ✅ PASSED (5/5) |
+| وجود الملفات، Routes، Sidebar | ✅ PASSED (10/10) |
+| Implementation Log | ✅ PASSED (3/3) |
+| PHP Lint | ✅ PASSED (5/5) |
+
+**الإجمالي: 36 PASSED | 0 FAILED**
+
+### اختبارات لم تُنفذ (غير HTTP)
+
+| الاختبار | السبب |
+|---|---|
+| اختبار Authorization الفعلي عبر HTTP (Admin/Warehouse/Sales) | يتطلب جلسة متصفح تفاعلية |
+| اختبارات التزامن المتعددة | تتطلب بيئة طلبات متزامنة |
+
+### حالة Git عند الانتهاء
+
+**الفرع:** `feature/F05-warehouse-stock-management` — لم يُنفذ أي Commit أو Push أو Merge.

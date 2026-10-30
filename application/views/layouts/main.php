@@ -768,12 +768,12 @@
                 <?php endif; ?>
 
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F05 القادمة">
+                    <a href="<?php echo site_url('stock'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'stock') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">📊</span>
-                            <span>أرصدة المستودعات</span>
+                            <span>أرصدة المخزون</span>
                         </span>
-                        <span class="nav-tag">F05</span>
+                        <span class="nav-tag nav-tag-active">F05</span>
                     </a>
                 </li>
                 <li class="nav-item">
