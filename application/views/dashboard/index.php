@@ -108,6 +108,44 @@
 <!-- Warehouse Dashboard -->
 <div class="card">
     <div class="card-header">
+        <h3 class="card-title">🏬 مستودعاتي المصرح بها</h3>
+    </div>
+    <p style="color: var(--text-muted); margin-bottom: 1.25rem;">
+        فيما يلي قائمة بالمستودعات المعينة لحسابك، حيث يمكنك مراقبة المخزون وتسجيل الحركات فور تفعيل ميزات المرحلة F05 و F06:
+    </p>
+
+    <?php if (!empty($assigned_warehouses)): ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+            <?php foreach ($assigned_warehouses as $awh): ?>
+                <div style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fafafa;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 1.05rem; color: var(--text-dark);"><?php echo html_escape($awh->name); ?></strong>
+                        <span class="badge <?php echo ((int)$awh->is_active === 1) ? 'badge-active' : 'badge-inactive'; ?>">
+                            <?php echo ((int)$awh->is_active === 1) ? 'نشط' : 'معطل'; ?>
+                        </span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                        الرمز: <strong style="color: var(--primary); font-family: monospace;"><?php echo html_escape($awh->code); ?></strong>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        الموقع: <?php echo $awh->location ? html_escape($awh->location) : '-'; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <a href="<?php echo site_url('warehouses/my'); ?>" class="btn btn-secondary btn-sm">
+            عرض صفحة مستودعاتي التفصيلية
+        </a>
+    <?php else: ?>
+        <div class="alert alert-warning" style="margin-bottom: 0;">
+            <span>⚠️</span>
+            <div>لم يتم تعيين أي مستودع لحسابك حتى الآن. يرجى التواصل مع مدير النظام لربطك بالمستودعات المخصصة.</div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<div class="card">
+    <div class="card-header">
         <h3 class="card-title">لوحة عمليات المستودع (Warehouse Operations)</h3>
     </div>
     <p style="color: var(--text-muted); margin-bottom: 1.25rem;">
@@ -115,12 +153,47 @@
     </p>
     <div class="alert alert-success">
         <span>ℹ</span>
-        <div>نظام المستودعات جاهز وسيتم ربط شاشات العمليات المخزنية تباعاً في الميزات F04 و F05 و F06.</div>
+        <div>نظام المستودعات جاهز وسيتم ربط شاشات العمليات المخزنية تباعاً في الميزات F05 (أرصدة المستودعات) و F06 (حركات المخزون).</div>
     </div>
 </div>
 
 <?php elseif ($current_user->role_name === 'sales'): ?>
 <!-- Sales Dashboard -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">🏬 المستودعات المتاحة للبيع</h3>
+    </div>
+    <p style="color: var(--text-muted); margin-bottom: 1.25rem;">
+        المستودعات التي يحق لك إصدار فواتير بيع منها:
+    </p>
+
+    <?php if (!empty($assigned_warehouses)): ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+            <?php foreach ($assigned_warehouses as $awh): ?>
+                <div style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fafafa;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 1.05rem; color: var(--text-dark);"><?php echo html_escape($awh->name); ?></strong>
+                        <span class="badge <?php echo ((int)$awh->is_active === 1) ? 'badge-active' : 'badge-inactive'; ?>">
+                            <?php echo ((int)$awh->is_active === 1) ? 'نشط' : 'معطل'; ?>
+                        </span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                        الرمز: <strong style="color: var(--primary); font-family: monospace;"><?php echo html_escape($awh->code); ?></strong>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        الموقع: <?php echo $awh->location ? html_escape($awh->location) : '-'; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-warning" style="margin-bottom: 0;">
+            <span>⚠️</span>
+            <div>لم يتم تعيين أي مستودع لحسابك حتى الآن. يرجى التواصل مع مدير النظام لربطك بمستودعات البيع المخصصة.</div>
+        </div>
+    <?php endif; ?>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">لوحة عمليات المبيعات (Sales Operations)</h3>
