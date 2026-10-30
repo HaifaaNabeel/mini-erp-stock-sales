@@ -58,11 +58,7 @@ class User_model extends MY_Model
     public function get_by_username_for_auth($username)
     {
         $clean_username = $this->normalize_username($username);
-        if ($clean_username === '') {
-            return null;
-        }
-
-        return $this->db->select('u.id, u.username, u.full_name, u.email, u.password_hash, u.role_id, u.is_active, u.created_at, u.updated_at, u.last_login_at, r.name AS role_name, r.display_name AS role_display_name')
+        return $this->db->select('u.id, u.username, u.full_name, u.email, u.password_hash, u.role_id, u.is_active, u.last_login_at, r.name AS role_name, r.display_name AS role_display_name')
             ->from($this->table . ' u')
             ->join('roles r', 'r.id = u.role_id', 'inner')
             ->where('u.username', $clean_username)
@@ -83,6 +79,84 @@ class User_model extends MY_Model
             ->order_by('u.id', 'ASC')
             ->get()
             ->result();
+    }
+
+    /**
+     * Count users matching search and filters
+     *
+     * @param string|null $search
+     * @param int|null $role_id
+     * @param int|null $status
+     * @param string|null $role_name
+     * @return int
+     */
+    public function count_users($search = NULL, $role_id = NULL, $status = NULL, $role_name = NULL)
+    {
+        $this->db->from($this->table . ' u')
+            ->join('roles r', 'r.id = u.role_id', 'inner');
+
+        if ($search !== NULL && trim($search) !== '') {
+            $this->db->group_start();
+            $this->db->like('u.username', trim($search));
+            $this->db->or_like('u.full_name', trim($search));
+            $this->db->or_like('u.email', trim($search));
+            $this->db->group_end();
+        }
+
+        if ($role_id !== NULL && (int)$role_id > 0) {
+            $this->db->where('u.role_id', (int)$role_id);
+        }
+
+        if ($role_name !== NULL && trim($role_name) !== '') {
+            $this->db->where('r.name', trim($role_name));
+        }
+
+        if ($status !== NULL && $status !== '') {
+            $this->db->where('u.is_active', (int)$status);
+        }
+
+        return (int)$this->db->count_all_results();
+    }
+
+    /**
+     * Get paginated users matching search and filters
+     *
+     * @param int $limit
+     * @param int $offset
+     * @param string|null $search
+     * @param int|null $role_id
+     * @param int|null $status
+     * @param string|null $role_name
+     * @return array
+     */
+    public function get_users_paged($limit, $offset, $search = NULL, $role_id = NULL, $status = NULL, $role_name = NULL)
+    {
+        $this->db->select('u.id, u.username, u.full_name, u.email, u.role_id, u.is_active, u.created_at, u.updated_at, u.last_login_at, r.name AS role_name, r.display_name AS role_display_name')
+            ->from($this->table . ' u')
+            ->join('roles r', 'r.id = u.role_id', 'inner')
+            ->order_by('u.id', 'DESC');
+
+        if ($search !== NULL && trim($search) !== '') {
+            $this->db->group_start();
+            $this->db->like('u.username', trim($search));
+            $this->db->or_like('u.full_name', trim($search));
+            $this->db->or_like('u.email', trim($search));
+            $this->db->group_end();
+        }
+
+        if ($role_id !== NULL && (int)$role_id > 0) {
+            $this->db->where('u.role_id', (int)$role_id);
+        }
+
+        if ($role_name !== NULL && trim($role_name) !== '') {
+            $this->db->where('r.name', trim($role_name));
+        }
+
+        if ($status !== NULL && $status !== '') {
+            $this->db->where('u.is_active', (int)$status);
+        }
+
+        return $this->db->limit((int)$limit, (int)$offset)->get()->result();
     }
 
     /**

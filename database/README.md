@@ -33,6 +33,51 @@
 
 ---
 
+### F04 — التصنيفات والمنتجات والمستودعات وتعيينات المستخدمين (`database/schema_f04_core.sql`)
+
+> [!NOTE]
+> هذا المخطط تم إعداده وحفظه كملف SQL فقط (`database/schema_f04_core.sql`) بانتظار مراجعة مالك المشروع والموافقة على تنفيذه على قاعدة البيانات.
+
+- **المحرك والترميز:** MariaDB 10.4.32 / InnoDB / `utf8mb4_unicode_ci`.
+- **قواعد السلامة المطبقة:** منع الحذف التتابعي (`ON DELETE RESTRICT`) لمنع فقدان البيانات التاريخية، استخدام التعطيل الناعم (`is_active = 0`).
+
+#### 1. جدول التصنيفات (`categories`):
+- `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`.
+- `name`: `VARCHAR(100) NOT NULL`.
+- `description`: `TEXT NULL DEFAULT NULL`.
+- `is_active`: `TINYINT(1) NOT NULL DEFAULT 1` (فهرس `idx_categories_is_active`).
+- `created_at`: `DATETIME NOT NULL`.
+- `updated_at`: `DATETIME NULL DEFAULT NULL`.
+
+#### 2. جدول المستودعات (`warehouses`):
+- `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`.
+- `name`: `VARCHAR(150) NOT NULL`.
+- `code`: `VARCHAR(50) NOT NULL UNIQUE` (فهرس فريد `uk_warehouses_code` مع تطبيع أحرف كبيرة TRIM + UPPERCASE).
+- `location`: `VARCHAR(255) NULL DEFAULT NULL`.
+- `is_active`: `TINYINT(1) NOT NULL DEFAULT 1` (فهرس `idx_warehouses_is_active`).
+- `created_at`: `DATETIME NOT NULL`.
+- `updated_at`: `DATETIME NULL DEFAULT NULL`.
+
+#### 3. جدول المنتجات (`products`):
+- `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`.
+- `sku`: `VARCHAR(64) NOT NULL UNIQUE` (فهرس فريد `uk_products_sku` مع تطبيع أحرف كبيرة TRIM + UPPERCASE).
+- `name`: `VARCHAR(200) NOT NULL`.
+- `description`: `TEXT NULL DEFAULT NULL`.
+- `category_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `categories.id` مع `ON UPDATE CASCADE ON DELETE RESTRICT`).
+- `sale_price`: `DECIMAL(12,2) NOT NULL DEFAULT 0.00` (التحقق خادميًا $\ge 0$).
+- `reorder_level`: `INT NOT NULL DEFAULT 0` (التحقق خادميًا $\ge 0$).
+- `is_active`: `TINYINT(1) NOT NULL DEFAULT 1` (فهرس `idx_products_is_active`).
+- `created_at`: `DATETIME NOT NULL`.
+- `updated_at`: `DATETIME NULL DEFAULT NULL`.
+
+#### 4. جدول ربط المستخدمين بالمستودعات (`user_warehouses`):
+- `user_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `users.id` مع `ON UPDATE RESTRICT ON DELETE RESTRICT`).
+- `warehouse_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `warehouses.id` مع `ON UPDATE RESTRICT ON DELETE RESTRICT`).
+- `created_at`: `DATETIME NOT NULL`.
+- **المفتاح الأساسي المركب:** `PRIMARY KEY (user_id, warehouse_id)` لمنع التكرار نهائيًا.
+
+---
+
 ## إعداد أول مدير نظام يدويًا عبر phpMyAdmin (Initial Admin Setup)
 
 وفق متطلبات الأمان والتأسيس المعتمدة:

@@ -17,7 +17,25 @@ class Users extends Admin_Controller
     public function index()
     {
         $data['page_title'] = 'إدارة المستخدمين';
-        $data['users'] = $this->User_model->get_all_users();
+
+        $search = $this->input->get('search', TRUE);
+        $role   = $this->input->get('role', TRUE);
+        $status = $this->input->get('status', TRUE);
+        $search = ($search !== NULL && trim($search) !== '') ? trim($search) : NULL;
+        $role   = ($role !== NULL && trim($role) !== '') ? trim($role) : NULL;
+        $status = ($status !== NULL && $status !== '') ? (int)$status : NULL;
+
+        $per_page   = $this->get_per_page_limit(10);
+        $total_rows = $this->User_model->count_users($search, NULL, $status, $role);
+        $pagination = $this->setup_pagination('users', $total_rows, $per_page);
+
+        $data['users']          = $this->User_model->get_users_paged($per_page, $pagination['offset'], $search, NULL, $status, $role);
+        $data['roles']          = $this->Role_model->get_all();
+        $data['pagination']     = $pagination;
+        $data['current_search'] = $search;
+        $data['current_role']   = $role;
+        $data['current_status'] = $status;
+
         $this->render_view('users/index', $data);
     }
 
@@ -289,5 +307,42 @@ class Users extends Admin_Controller
         $this->session->set_flashdata('success', "تم {$status_text} المستخدم بنجاح.");
         redirect('users');
     }
-}
 
+    /**
+     * Manage assigned warehouses for a specific user
+     *
+     * @param int $id
+     * @return void
+     */
+    public function warehouses($id)
+    {
+        $user = $this->User_model->get_by_id((int)$id);
+        if (!$user) {
+            $this->session->set_flashdata('error', 'المستخدم المطلوب غير موجود.');
+            redirect('users');
+            return;
+        }
+
+        $this->load->model('Warehouse_model');
+        $this->load->model('User_warehouse_model');
+
+        $data['page_title']             = 'المستودعات المصرح بها للمستخدم: ' . html_escape($user->full_name);
+        $data['user']                   = $user;
+        $data['warehouses']             = $this->Warehouse_model->get_active();
+        $data['assigned_warehouse_ids'] = $this->User_warehouse_model->get_assigned_warehouse_ids($user->id);
+
+        if ($this->input->method() === 'post') {
+            $submitted_ids = $this->input->post('warehouse_ids');
+            if (!is_array($submitted_ids)) {
+                $submitted_ids = array();
+            }
+
+            $this->User_warehouse_model->sync_user_warehouses($user->id, $submitted_ids);
+            $this->session->set_flashdata('success', 'تم تحديث المستودعات المصرح بها للمستخدم بنجاح.');
+            redirect('users');
+            return;
+        }
+
+        $this->render_view('users/warehouses', $data);
+    }
+}

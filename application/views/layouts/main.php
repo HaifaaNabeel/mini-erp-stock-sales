@@ -527,6 +527,128 @@
             margin-top: 0.35rem;
         }
 
+        /* Unified Data Table Controls & Pagination */
+        .datatable-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .show-entries-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+
+        .show-entries-select {
+            padding: 0.38rem 0.65rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: #ffffff;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .show-entries-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+
+        .datatable-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1.25rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .datatable-summary {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .pagination {
+            display: inline-flex !important;
+            flex-direction: row !important;
+            gap: 0.35rem !important;
+            align-items: center !important;
+            list-style: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .pagination .page-item {
+            display: inline-flex !important;
+            list-style: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .pagination .page-item .page-link,
+        .pagination .page-item a {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0.45rem 0.85rem !important;
+            border-radius: 6px !important;
+            text-decoration: none !important;
+            font-size: 0.88rem !important;
+            font-weight: 600 !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text-dark) !important;
+            background: #ffffff !important;
+            transition: all 0.15s ease-in-out !important;
+            min-width: 38px !important;
+            height: 38px !important;
+            line-height: 1 !important;
+        }
+
+        .pagination .page-item a:hover {
+            background: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: var(--primary) !important;
+        }
+
+        .pagination .page-item.active .page-link {
+            background: var(--primary) !important;
+            color: #ffffff !important;
+            border-color: var(--primary) !important;
+        }
+
+        .filter-toolbar {
+            background-color: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .filter-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            flex: 1;
+        }
+
         /* Footer */
         .footer {
             background-color: #ffffff;
@@ -551,6 +673,10 @@
             }
             .btn-toggle-sidebar {
                 display: block;
+            }
+            .filter-form {
+                flex-direction: column;
+                align-items: stretch;
             }
         }
     </style>
@@ -598,23 +724,54 @@
             <?php endif; ?>
 
             <!-- Inventory Section -->
-            <?php if (isset($current_user) && ($current_user->role_name === 'admin' || $current_user->role_name === 'warehouse')): ?>
             <div class="nav-category">المخزون والمستودعات</div>
             <ul class="nav-list">
+                <?php if (isset($current_user) && $current_user->role_name === 'admin'): ?>
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F04 القادمة">
+                    <a href="<?php echo site_url('categories'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'categories') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">🏷️</span>
-                            <span>التصنيفات والمنتجات</span>
+                            <span>التصنيفات</span>
                         </span>
-                        <span class="nav-tag">F04</span>
+                        <span class="nav-tag nav-tag-active">F04</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F05 القادمة">
+                    <a href="<?php echo site_url('products'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'products') ? 'active' : ''; ?>">
+                        <span class="nav-link-content">
+                            <span class="nav-icon">📦</span>
+                            <span>المنتجات</span>
+                        </span>
+                        <span class="nav-tag nav-tag-active">F04</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="<?php echo site_url('warehouses'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'warehouses' && $this->uri->segment(2) !== 'my') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">🏬</span>
-                            <span>المستودعات والأرصدة</span>
+                            <span>إدارة المستودعات</span>
+                        </span>
+                        <span class="nav-tag nav-tag-active">F04</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
+                <?php if (isset($current_user) && ($current_user->role_name === 'warehouse' || $current_user->role_name === 'sales')): ?>
+                <li class="nav-item">
+                    <a href="<?php echo site_url('warehouses/my'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'warehouses' && $this->uri->segment(2) === 'my') ? 'active' : ''; ?>">
+                        <span class="nav-link-content">
+                            <span class="nav-icon">🏬</span>
+                            <span>مستودعاتي المصرح بها</span>
+                        </span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
+                <li class="nav-item">
+                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F05 القادمة">
+                        <span class="nav-link-content">
+                            <span class="nav-icon">📊</span>
+                            <span>أرصدة المستودعات</span>
                         </span>
                         <span class="nav-tag">F05</span>
                     </a>
@@ -629,7 +786,6 @@
                     </a>
                 </li>
             </ul>
-            <?php endif; ?>
 
             <!-- Sales Section -->
             <?php if (isset($current_user) && ($current_user->role_name === 'admin' || $current_user->role_name === 'sales')): ?>
@@ -741,6 +897,35 @@
             var sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('open');
         });
+
+        // Global Handler for Entries Per Page (Show) Change
+        function changeEntriesLimit(selectElement, formId) {
+            if (formId) {
+                var form = document.getElementById(formId);
+                if (form) {
+                    var pageInput = form.querySelector('input[name="page"]');
+                    if (pageInput) {
+                        pageInput.remove();
+                    }
+                    form.submit();
+                    return;
+                }
+            }
+            var formParent = selectElement.closest('form');
+            if (formParent) {
+                var pageInput = formParent.querySelector('input[name="page"]');
+                if (pageInput) {
+                    pageInput.remove();
+                }
+                formParent.submit();
+                return;
+            }
+            // Fallback for standalone dropdown
+            var url = new URL(window.location.href);
+            url.searchParams.set('limit', selectElement.value);
+            url.searchParams.delete('page');
+            window.location.href = url.toString();
+        }
     </script>
 </body>
 </html>
