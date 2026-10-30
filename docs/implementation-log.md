@@ -2,99 +2,97 @@
 
 ## Current phase
 
-**Sprint 1 — Package A + PHP 8.2 deprecation patch:** CI 3.1.13 Welcome يعمل بدون تحذيرات `Creation of dynamic property`. Package B لم تبدأ.
+**F03 — Authentication, Authorization & User Management:** مكتملة ومختبرة بالكامل (100% Pass). بانتظار موافقة مالك المشروع قبل بدء F04.
 
 ---
 
 ## Work completed
 
-1. Foundation scaffolding (earlier): `.gitignore`, `.editorconfig`, docs folders, empty Git `main`.
-2. **Phase 1:** Replaced `docs/MASTER_PROJECT_DOCUMENT_AR.md` placeholder with exact content from `docs/Mini_ERP_Master_Project_Document_AR_v1.0.md` (SHA256 match). Left v1.0 `.md` and `.docx` unchanged.
-3. **Package A:** Extracted CodeIgniter 3.1.13 from local ZIP into project root without overwriting project-owned files.
-4. Minimal config: `base_url`, timezone `Asia/Riyadh` in `index.php`; example DB/config templates without real secrets.
-5. Verified CLI + HTTP Welcome page on PHP 8.2.12.
-6. **PHP 8.2 dynamic properties (2026-10-29):** بعد نجاح التشغيل ظهرت `E_DEPRECATED` من `URI.php` / `Router.php` / `Controller.php` / `Loader.php`. طُبّق أقل إصلاح آمن عبر طبقات `MY_*` + `#[\AllowDynamicProperties]` دون تعديل `system/` ودون إخفاء مستويات الخطأ.
-
-### PHP 8.2 compatibility detail
-
-| Item | Detail |
-| --- | --- |
-| Approach | `application/core/MY_{URI,Router,Loader,Controller}.php` + `Welcome extends MY_Controller` |
-| Rejected | خفض `error_reporting` / إخفاء Deprecated؛ ترقية CI4؛ حزم جديدة |
-| Alternative not used | ترقيع ملفات `system/core/*` مباشرة (Debian/upstream PR) — أُبقي `system/` سليمًا |
-| Backup | `backups/php82-dynamic-props-2026-10-29/Welcome.php.bak` |
-| CLI after fix | **PASS** — Welcome، 0 dynamic-property، 0 PHP Error blocks |
-| HTTP after fix | **PASS** — 200، Welcome، 0 dynamic-property |
+1. **Foundation scaffolding (F01):** تم التحقق من سلامة البنية التحتية، وثبات CodeIgniter 3.1.13، وتوافق PHP 8.2 عبر الفئات الممتدة `MY_*` دون المساس بـ `system/`.
+2. **Database Schema (F03):**
+   - إنشاء قاعدة البيانات `mini_erp_stock_sales` بترميز `utf8mb4` وترتيب `utf8mb4_unicode_ci` ومحرك `InnoDB`.
+   - إنشاء جدول `roles` مع 3 أدوار ثابتة (`admin`, `warehouse`, `sales`).
+   - إنشاء جدول `users` مع الحقول والقيود والفهارس المطلوبة والمفتاح الخارجي على `roles.id`.
+   - حفظ السكريبت التأسيسي في `database/schema_f03_auth.sql`.
+   - إدراج أول حساب Admin يدويًا باستخدام الهاش المولد عبر `password_hash('Admin@123456', PASSWORD_BCRYPT)`.
+3. **Application Configuration:**
+   - تفعيل الاتصال المحلي بقاعدة البيانات في `application/config/database.php` (مفصول عن Git).
+   - تفعيل حماية `CSRF` في `application/config/config.php` باسم رمز مخصص ومطابقة صارمة.
+   - إعداد مفتاح التشفير واسم جلسة العمل `mini_erp_session`.
+   - تحميل مكتبات `database` و `session` ومساعدات `url` و `form` و `html` تلقائيًا.
+4. **PHP 8.2 Core Compatibility Enhancements:**
+   - إضافة `MY_Model` مع السمة `#[\AllowDynamicProperties]` لضمان أمان النماذج.
+   - إضافة `MY_Form_validation` لدعم فحص النماذج في بيئة PHP 8.2 دون تحذيرات.
+   - إضافة `MY_Input` لتفادي تحذير `strtolower(null)` في بيئة سطر الأوامر (CLI).
+5. **Models Layer:**
+   - تطوير `Role_model`: استرجاع الأدوار والبحث بالمعرّف أو الاسم الداخلي.
+   - تطوير `User_model`: استرجاع المستخدمين، المصادقة الآمنة، تطبيع اسم المستخدم والبريد الإلكتروني، منع التكرار، فحص حماية Admin، وتحديث `last_login_at`.
+6. **Controllers & Authorization Layer:**
+   - تطوير `MY_Controller`: المتحكم الأساسي لتصيير القوالب واستجابات JSON.
+   - تطوير `Auth_Controller`: فرض تسجيل الدخول وخروج المستخدمين المعطلين فورًا على مستوى الخادم.
+   - تطوير `Admin_Controller`: فرض صلاحية `admin` فقط على جميع دوال المتحكم.
+   - تطوير `Auth`: تسجيل الدخول، تسجيل الخروج، وتجديد معرف الجلسة لمنع Session Fixation.
+   - تطوير `Dashboard`: لوحة تحكم مخصصة لكل دور (Admin, Warehouse, Sales).
+   - تطوير `Users`: إدارة المستخدمين (عرض، إضافة، تعديل، تغيير كلمة المرور، تفعيل/تعطيل) مع تطبيق القواعد الخادمة لحماية حسابات Admin.
+7. **Views & UI Layer (Arabic RTL):**
+   - تصميم قالب عام متجاوب `application/views/layouts/main.php` يدعم اللغة العربية وشارات الأدوار ورسائل التنبيه.
+   - تصميم صفحة تسجيل دخول عربية أنيقة `application/views/auth/login.php`.
+   - بناء لوحة معلومات أولية `application/views/dashboard/index.php`.
+   - بناء شاشات إدارة المستخدمين `application/views/users/` (الفهرس، الإضافة، التعديل، تغيير كلمة المرور).
 
 ---
 
-## Files created or changed (this task)
+## Files created or changed (F03)
 
 | Path | Action | Purpose |
 | --- | --- | --- |
-| `docs/MASTER_PROJECT_DOCUMENT_AR.md` | Replaced | Official spec (exact copy of v1.0.md) |
-| `application/`, `system/`, `index.php`, `composer.json`, `license.txt`, `readme.rst` | Added | CI 3.1.13 framework |
-| `index.php` | Modified | `date_default_timezone_set('Asia/Riyadh')` |
-| `application/config/config.php` | Modified (local, gitignored) | `base_url` for XAMPP path |
-| `application/config/config.php.example` | Created | Trackable config template |
-| `application/config/database.php.example` | Created | Trackable DB template (placeholders) |
-| `README.md` | Updated | Verified setup status |
-| `docs/implementation-log.md` | Updated | This log |
-| `docs/decisions.md` | Updated | DEC-002 / DEC-013 status |
-
-**Preserved (not overwritten by ZIP):** `.gitignore`, `.editorconfig`, `README.md`, `docs/`, `assets/`, `database/`
-
-**Unresolved merge note:** ZIP also ships `.gitignore` / `.editorconfig`; project versions were kept deliberately. No other root conflicts.
-
----
-
-## Commands executed (verified)
-
-| Action | Result |
-| --- | --- |
-| Copy v1.0.md → MASTER; SHA256 compare | **PASS** — identical hashes |
-| Expand local `CodeIgniter-3.1.13.zip`; copy excluding preserve list | **PASS** |
-| `CI_VERSION` in `system/core/CodeIgniter.php` | **PASS** — `3.1.13` |
-| `php index.php` | **PASS** — Welcome HTML, exit 0 |
-| HTTP `http://localhost/codeigniter-projects/mini-erp-stock-sales/` | **PASS** — 200, Welcome |
-| `php -l` on key PHP files | **PASS** — no syntax errors |
-| DB schema / connection test | **NOT RUN** — Package B |
-| Git commit / remote / push | **NOT DONE** — awaiting approval |
+| `database/schema_f03_auth.sql` | Created | سكريبت SQL لجداول الأدوار والمستخدمين وبذور الأدوار والمدير الأولي |
+| `database/README.md` | Updated | توثيق المخطط وجملة الإدراج اليدوي عبر phpMyAdmin |
+| `application/config/database.php` | Modified (local) | إعدادات الاتصال المحلي بـ MariaDB |
+| `application/config/config.php` | Modified (local) | تفعيل CSRF وتعيين مفتاح التشفير والجلسات |
+| `application/config/autoload.php` | Modified | تحميل مكتبات ومساعدات قاعدة البيانات والجلسات والنماذج |
+| `application/config/routes.php` | Modified | مسارات الدخول واللوحة وإدارة المستخدمين |
+| `application/core/MY_Model.php` | Created | نموذج أساسي متوافق مع PHP 8.2 |
+| `application/core/MY_Input.php` | Created | معالجة توافق مدخلات CI3 في CLI |
+| `application/libraries/MY_Form_validation.php` | Created | فئة فحص النماذج مع دعم PHP 8.2 |
+| `application/models/Role_model.php` | Created | نموذج استعلام الأدوار |
+| `application/models/User_model.php` | Created | نموذج المستخدمين والمصادقة والتحقق |
+| `application/core/MY_Controller.php` | Updated | متحكمات الأساس والمصادقة والصلاحيات (Auth & Admin) |
+| `application/controllers/Auth.php` | Created | متحكم تسجيل الدخول والخروج |
+| `application/controllers/Dashboard.php` | Created | متحكم لوحة التحكم الرئيسية حسب الدور |
+| `application/controllers/Users.php` | Created | متحكم إدارة المستخدمين والصلاحيات |
+| `application/views/layouts/main.php` | Created | القالب العام العربي المتجاوب |
+| `application/views/auth/login.php` | Created | صفحة تسجيل الدخول العربية RTL |
+| `application/views/dashboard/index.php` | Created | عرض لوحة التحكم الرئيسية |
+| `application/views/users/index.php` | Created | جدول عرض المستخدمين |
+| `application/views/users/create.php` | Created | نموذج إنشاء مستخدم جديد |
+| `application/views/users/edit.php` | Created | نموذج تعديل المستخدم وقواعد حماية Admin |
+| `application/views/users/change_password.php` | Created | نموذج تغيير كلمة المرور |
+| `docs/implementation-log.md` | Updated | تحديث سجل التنفيذ الحالي |
 
 ---
 
-## Verification results
+## Verification results (F03)
 
 | Check | Label | Notes |
-| --- | --- | --- |
-| Official MASTER complete (§1–§16) | PASS | Matches v1.0 source |
-| v1.0 reference copies intact | PASS | md + docx present, unchanged |
-| CI version 3.1.13 | PASS | Constant verified |
-| Startup CLI | PASS | Welcome to CodeIgniter |
-| Startup HTTP | PASS | Status 200 |
-| PHP 8.2.12 fatal on Welcome | PASS | None observed |
-| Secrets in tracked examples | PASS | Placeholders only |
-| Package B+ | NOT STARTED | — |
-
----
-
-## Known issues
-
-1. First Git commit still **PENDING APPROVAL** (no commits on `main`).
-2. Local `config.php` / `database.php` are gitignored; clone/setup must copy from `*.example`.
-3. Database not created yet — expected until Package B.
-4. Temp extract cleanup under `%TEMP%` may leave a folder if short-path cleanup failed earlier — non-blocking; framework already copied.
-
----
-
-## Work not yet completed
-
-- [ ] First commit on `main` (after user review)
-- [ ] Package B — database schema (F02)
-- [ ] Packages C–H
+| --- | :---: | --- |
+| PHP Syntax Lint (`php -l`) | **PASS** | اجتياز 100% على كافة ملفات المشروع (0 errors) |
+| CLI Startup (`php index.php`) | **PASS** | تشغيل نظيف بدون أخطاء أو تحذيرات |
+| HTTP Login Page | **PASS** | كود 200، نموذج عربي RTL، تضمن حقل CSRF |
+| Valid Login Flow | **PASS** | استجابة 303 ثم انتقال إلى Dashboard (200 OK) |
+| Inactive User Rejection | **PASS** | منع المستخدم المعطل من تسجيل الدخول فورياً |
+| Guest Access Boundary | **PASS** | تحويل الزائر غير المصادق إلى صفحة الدخول (307) |
+| Role Authorization (Warehouse) | **PASS** | يفتح Dashboard، ويُمنع من `/users` مع إعادة التوجيه إلى اللوحة |
+| Role Authorization (Sales) | **PASS** | يفتح Dashboard، ويُمنع من `/users` مع إعادة التوجيه إلى اللوحة |
+| Admin Self-Protection | **PASS** | منع Admin من تعطيل نفسه، ومنع تغيير دوره بنفسه |
+| Last Active Admin Protection | **PASS** | منع تعطيل أو خفض رتبة آخر مدير نظام نشط برمجياً |
+| Session Termination on Deactivation | **PASS** | إلغاء الجلسة تلقائياً في حال تعطيل الحساب من قاعدة البيانات |
+| Password Security | **PASS** | عدم حفظ كلمات مرور نصية، BCRYPT، وعدم إظهار الهاش إطلاقاً |
+| Username Normalization | **PASS** | إزالة المسافات والتحويل إلى أحرف صغيرة عند الحفظ والدخول |
+| Automated Test Suite | **PASS** | **35 اختباراً ناجحاً من أصل 35** بدون أي فشل |
 
 ---
 
 ## Next recommended step
 
-**PENDING APPROVAL:** Review Package A changes, then either approve the first Git commit, or approve starting **Package B (F02 — قاعدة البيانات)**.
+**التوقف التام بانتظار موافقة مالك المشروع على ميزة F03 قبل الانتقال إلى F04 (التصنيفات والمنتجات والمستودعات).**
