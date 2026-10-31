@@ -110,4 +110,4 @@ $route['sales/invoices/create'] = 'sales_invoices/create';
 $route['sales/invoices/ajax_get_products'] = 'sales_invoices/ajax_get_products';
 $route['sales/invoices/print/(:num)'] = 'sales_invoices/print_invoice/$1';
 $route['sales/invoices/view/(:num)'] = 'sales_invoices/view/$1';
-
+$route['sales/invoices/cancel/(:num)'] = 'sales_invoices/cancel/$1';

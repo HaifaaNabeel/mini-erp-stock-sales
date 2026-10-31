@@ -22,6 +22,11 @@
         </div>
 
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <?php if ($invoice->status === 'active' && $this->current_user->role_name === 'admin'): ?>
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('cancel-invoice-modal').style.display='flex';" title="إلغاء الفاتورة واسترجاع المخزون">
+                    🚫 إلغاء الفاتورة
+                </button>
+            <?php endif; ?>
             <a href="<?php echo site_url('sales/invoices/print/' . $invoice->id); ?>" class="btn btn-primary" target="_blank">
                 🖨️ طباعة الفاتورة
             </a>
@@ -211,3 +216,42 @@
     </div>
 </div>
 
+<!-- Cancellation Confirmation Modal (Admin only) -->
+<?php if ($invoice->status === 'active' && $this->current_user->role_name === 'admin'): ?>
+    <div id="cancel-invoice-modal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 9999; align-items: center; justify-content: center; padding: 1rem;">
+        <div style="background: #ffffff; border-radius: 12px; max-width: 500px; width: 100%; padding: 1.75rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); direction: rtl; text-align: right;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; font-size: 1.15rem; color: #991b1b; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>⚠️</span> تأكيد إلغاء الفاتورة
+                </h3>
+                <button type="button" onclick="document.getElementById('cancel-invoice-modal').style.display='none';" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            
+            <p style="font-size: 0.9rem; color: #475569; margin-bottom: 1.25rem; line-height: 1.6;">
+                هل أنت متأكد من رغبتك في إلغاء الفاتورة رقم <strong><?php echo html_escape($invoice->invoice_number); ?></strong>؟
+                <br>
+                <span style="color: #b91c1c; font-size: 0.85rem;">
+                    * سيؤدي الإلغاء إلى استرجاع جميع كميات الأصناف المباعة إلى مستودع الصرف (<strong><?php echo html_escape($invoice->warehouse_name); ?></strong>) وتسجيل حركات مخزنية عكسية موثقة. لا يمكن التراجع عن هذا الإجراء.
+                </span>
+            </p>
+
+            <?php echo form_open('sales/invoices/cancel/' . $invoice->id, array('id' => 'cancel-invoice-form')); ?>
+                <div style="margin-bottom: 1.25rem;">
+                    <label for="cancellation_reason" style="display: block; font-size: 0.88rem; font-weight: 600; color: var(--text-dark); margin-bottom: 0.4rem;">
+                        سبب الإلغاء <span style="color: var(--danger);">*</span> (5 أحرف على الأقل):
+                    </label>
+                    <textarea name="cancellation_reason" id="cancellation_reason" rows="3" class="form-control" required minlength="5" maxlength="255" placeholder="أدخل سبب إلغاء الفاتورة (مثال: طلب العميل إرجاع الطلب كاملاً، خطأ في الفاتورة...)"></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.65rem;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('cancel-invoice-modal').style.display='none';">
+                        تراجع
+                    </button>
+                    <button type="submit" class="btn btn-danger" style="background-color: #dc2626; border-color: #dc2626;">
+                        تأكيد الإلغاء واسترجاع المخزون
+                    </button>
+                </div>
+            <?php echo form_close(); ?>
+        </div>
+    </div>
+<?php endif; ?>
