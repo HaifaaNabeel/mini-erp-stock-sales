@@ -795,6 +795,35 @@ class Sales_invoice_model extends MY_Model
                 }
             }
 
+            // 6.7.1 Central Audit Logging within Active Transaction (F10)
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $audit_meta = array(
+                'invoice_number'      => $invoice_number,
+                'customer_id'         => (int)$customer_id,
+                'warehouse_id'        => (int)$warehouse_id,
+                'subtotal'            => (float)$subtotal,
+                'discount_percentage' => (float)$discount_percentage,
+                'discount_amount'     => (float)$discount_amount,
+                'total_amount'        => (float)$total_amount,
+                'items_count'         => count($processed_items),
+                'currency_code'       => 'SAR'
+            );
+            $audit_logged = $this->Audit_model->log(
+                'invoice_create',
+                'sales_invoice',
+                $invoice_id,
+                "إنشاء فاتورة مبيعات جديدة رقم {$invoice_number} بمبلغ إجمالي {$total_amount} ر.س",
+                $audit_meta,
+                $user_id
+            );
+
+            if ($audit_logged === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل تسجيل العملية في سجل التدقيق؛ تم التراجع عن إنشاء الفاتورة بالكامل.', 'error_code' => 'AUDIT_LOG_FAILED');
+            }
+
             // 6.8 Final status check and Commit
             if ($this->db->trans_status() === FALSE) {
                 $this->db->trans_rollback();
@@ -1132,6 +1161,32 @@ class Sales_invoice_model extends MY_Model
             if ($update_inv_res === FALSE || $this->db->trans_status() === FALSE || !empty($db_err['code'])) {
                 $this->db->trans_rollback();
                 return array('success' => FALSE, 'error' => 'فشل تحديث حالة الفاتورة إلى ملغاة.', 'error_code' => 'INVOICE_CANCEL_UPDATE_FAILED');
+            }
+
+            // 3.7.1 Central Audit Logging within Cancellation Transaction (F10)
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $audit_meta = array(
+                'invoice_number'       => $invoice_row->invoice_number,
+                'customer_id'          => (int)$invoice_row->customer_id,
+                'warehouse_id'         => (int)$invoice_row->warehouse_id,
+                'total_amount'         => (float)$invoice_row->total_amount,
+                'cancellation_reason'  => $clean_reason,
+                'restored_items_count' => count($reversal_movements)
+            );
+            $audit_logged = $this->Audit_model->log(
+                'invoice_cancel',
+                'sales_invoice',
+                (int)$invoice_row->id,
+                "إلغاء فاتورة مبيعات رقم {$invoice_row->invoice_number} بسبب: {$clean_reason}",
+                $audit_meta,
+                (int)$user->id
+            );
+
+            if ($audit_logged === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل تسجيل العملية في سجل التدقيق؛ تم التراجع عن إلغاء الفاتورة بالكامل.', 'error_code' => 'AUDIT_LOG_FAILED');
             }
 
             // 3.8 Commit Transaction

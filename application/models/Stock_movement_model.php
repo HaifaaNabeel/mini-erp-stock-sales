@@ -529,6 +529,44 @@ class Stock_movement_model extends MY_Model
                 );
             }
 
+            // 7.10.1 Central Audit Logging within Active Transaction (F10)
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $action_code = ($movement_type === 'in') ? 'stock_in' : 'stock_adjustment';
+            $audit_details = ($movement_type === 'in')
+                ? "إضافة مخزون (توريد) للمنتج #{$product_id} في المستودع #{$warehouse_id} بكمية +{$quantity_delta}"
+                : "تسوية مخزون للمنتج #{$product_id} في المستودع #{$warehouse_id} بتغير {$quantity_delta} (السبب: {$reason})";
+
+            $audit_meta = array(
+                'warehouse_id'     => (int)$warehouse_id,
+                'product_id'       => (int)$product_id,
+                'movement_type'    => $movement_type,
+                'quantity_delta'   => (int)$quantity_delta,
+                'before_quantity'  => (int)$before_quantity,
+                'after_quantity'   => (int)$after_quantity,
+                'reason'           => $reason,
+                'idempotency_key'  => $idempotency_key
+            );
+
+            $audit_logged = $this->Audit_model->log(
+                $action_code,
+                'stock_movement',
+                $movement_id,
+                $audit_details,
+                $audit_meta,
+                $created_by
+            );
+
+            if ($audit_logged === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array(
+                    'success'    => FALSE,
+                    'error'      => 'فشل تسجيل العملية في سجل التدقيق؛ تم التراجع عن حركة المخزون بالكامل.',
+                    'error_code' => 'AUDIT_LOG_FAILED'
+                );
+            }
+
             // 7.11 Commit transaction explicitly and verify commit success
             $commit_result = $this->db->trans_commit();
             if ($commit_result === FALSE || $this->db->trans_status() === FALSE) {
