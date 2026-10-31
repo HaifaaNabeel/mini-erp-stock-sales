@@ -229,6 +229,12 @@ class Customer_model extends MY_Model
             }
 
             $customer_id = (int)$this->db->insert_id();
+            if ($customer_id > 0) {
+                if (!isset($this->Audit_model)) {
+                    $this->load->model('Audit_model');
+                }
+                $this->Audit_model->log('customer_create', 'customer', $customer_id, "إضافة عميل جديد: {$insert_data['name']}", $insert_data);
+            }
 
             return array(
                 'success'     => TRUE,
@@ -352,6 +358,13 @@ class Customer_model extends MY_Model
                     'error_code' => 'DB_UPDATE_FAILED'
                 );
             }
+
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $action = ($target_status === 1) ? 'customer_activate' : 'customer_deactivate';
+            $details = ($target_status === 1) ? "تفعيل العميل #{$valid_id} ({$customer->name})" : "تعطيل العميل #{$valid_id} ({$customer->name})";
+            $this->Audit_model->log($action, 'customer', $valid_id, $details, array('is_active' => $target_status));
 
             return array(
                 'success'    => TRUE,

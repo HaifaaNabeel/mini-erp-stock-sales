@@ -125,3 +125,7 @@ $route['reports/invoices'] = 'reports/invoices';
 $route['reports/invoices/export'] = 'reports/export_invoices_csv';
 $route['reports/low_stock'] = 'reports/low_stock';
 $route['reports/low_stock/export'] = 'reports/export_low_stock_csv';
+
+// F10: Central Audit Logs (Admin only)
+$route['audit_logs'] = 'audit_logs/index';
+$route['audit_logs/view/(:num)'] = 'audit_logs/view/$1';

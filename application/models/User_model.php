@@ -180,7 +180,22 @@ class User_model extends MY_Model
         );
 
         $this->db->insert($this->table, $insert_data);
-        return $this->db->insert_id();
+        $insert_id = $this->db->insert_id();
+
+        if ($insert_id > 0) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log(
+                'user_create',
+                'user',
+                $insert_id,
+                "إنشاء مستخدم جديد: {$insert_data['username']} ({$insert_data['full_name']})",
+                array('username' => $insert_data['username'], 'full_name' => $insert_data['full_name'], 'role_id' => $insert_data['role_id'])
+            );
+        }
+
+        return $insert_id;
     }
 
     /**
@@ -212,7 +227,21 @@ class User_model extends MY_Model
             $update_data['is_active'] = (int)$data['is_active'];
         }
 
-        return $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        $res = $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $action = (isset($update_data['is_active']) && count($update_data) <= 2)
+                ? ($update_data['is_active'] ? 'user_activate' : 'user_deactivate')
+                : 'user_update';
+            $details = (isset($update_data['is_active']) && count($update_data) <= 2)
+                ? ($update_data['is_active'] ? "تفعيل المستخدم #{$id}" : "تعطيل المستخدم #{$id}")
+                : "تعديل بيانات المستخدم #{$id}";
+            $this->Audit_model->log($action, 'user', (int)$id, $details, $update_data);
+        }
+
+        return $res;
     }
 
     /**
@@ -229,7 +258,15 @@ class User_model extends MY_Model
             'updated_at'    => date('Y-m-d H:i:s'),
         );
 
-        return $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        $res = $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log('user_password_change', 'user', (int)$id, "تغيير كلمة مرور المستخدم #{$id}");
+        }
+
+        return $res;
     }
 
     /**

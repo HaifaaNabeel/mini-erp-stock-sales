@@ -187,7 +187,14 @@ class Warehouse_model extends MY_Model
         );
 
         $this->db->insert($this->table, $insert_data);
-        return $this->db->insert_id();
+        $insert_id = $this->db->insert_id();
+        if ($insert_id > 0) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log('warehouse_create', 'warehouse', $insert_id, "إضافة مستودع جديد: {$insert_data['name']} ({$insert_data['code']})", $insert_data);
+        }
+        return $insert_id;
     }
 
     /**
@@ -216,7 +223,14 @@ class Warehouse_model extends MY_Model
             $update_data['is_active'] = (int)$data['is_active'];
         }
 
-        return $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        $res = $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log('warehouse_update', 'warehouse', (int)$id, "تعديل بيانات المستودع #{$id}", $update_data);
+        }
+        return $res;
     }
 
     /**
@@ -234,9 +248,18 @@ class Warehouse_model extends MY_Model
 
         $new_status = ((int)$warehouse->is_active === 1) ? 0 : 1;
 
-        return $this->db->where('id', (int)$id)->update($this->table, array(
+        $res = $this->db->where('id', (int)$id)->update($this->table, array(
             'is_active'  => $new_status,
             'updated_at' => date('Y-m-d H:i:s'),
         ));
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $action = $new_status ? 'warehouse_activate' : 'warehouse_deactivate';
+            $details = $new_status ? "تفعيل المستودع #{$id} ({$warehouse->name})" : "تعطيل المستودع #{$id} ({$warehouse->name})";
+            $this->Audit_model->log($action, 'warehouse', (int)$id, $details, array('is_active' => $new_status));
+        }
+        return $res;
     }
 }

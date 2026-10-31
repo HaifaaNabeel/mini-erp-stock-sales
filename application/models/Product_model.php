@@ -181,7 +181,14 @@ class Product_model extends MY_Model
         );
 
         $this->db->insert($this->table, $insert_data);
-        return $this->db->insert_id();
+        $insert_id = $this->db->insert_id();
+        if ($insert_id > 0) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log('product_create', 'product', $insert_id, "إضافة منتج جديد: {$insert_data['name']} (SKU: {$insert_data['sku']})", $insert_data);
+        }
+        return $insert_id;
     }
 
     /**
@@ -221,7 +228,14 @@ class Product_model extends MY_Model
             $update_data['is_active'] = (int)$data['is_active'];
         }
 
-        return $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        $res = $this->db->where('id', (int)$id)->update($this->table, $update_data);
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $this->Audit_model->log('product_update', 'product', (int)$id, "تعديل بيانات المنتج #{$id}", $update_data);
+        }
+        return $res;
     }
 
     /**
@@ -239,10 +253,19 @@ class Product_model extends MY_Model
 
         $new_status = ((int)$product->is_active === 1) ? 0 : 1;
 
-        return $this->db->where('id', (int)$id)->update($this->table, array(
+        $res = $this->db->where('id', (int)$id)->update($this->table, array(
             'is_active'  => $new_status,
             'updated_at' => date('Y-m-d H:i:s'),
         ));
+        if ($res) {
+            if (!isset($this->Audit_model)) {
+                $this->load->model('Audit_model');
+            }
+            $action = $new_status ? 'product_activate' : 'product_deactivate';
+            $details = $new_status ? "تفعيل المنتج #{$id} ({$product->name})" : "تعطيل المنتج #{$id} ({$product->name})";
+            $this->Audit_model->log($action, 'product', (int)$id, $details, array('is_active' => $new_status));
+        }
+        return $res;
     }
 }
 

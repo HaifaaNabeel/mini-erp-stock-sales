@@ -825,12 +825,12 @@
                 </li>
                 <?php if (isset($current_user) && $current_user->role_name === 'admin'): ?>
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F10 القادمة">
+                    <a href="<?php echo site_url('audit_logs'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'audit_logs') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">📜</span>
                             <span>سجل التدقيق</span>
                         </span>
-                        <span class="nav-tag">F10</span>
+                        <span class="nav-tag nav-tag-active">F10</span>
                     </a>
                 </li>
                 <?php endif; ?>

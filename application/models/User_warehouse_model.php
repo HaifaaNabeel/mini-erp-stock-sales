@@ -137,6 +137,17 @@ class User_warehouse_model extends MY_Model
                 ));
             }
         }
+
+        if (!isset($this->Audit_model)) {
+            $this->load->model('Audit_model');
+        }
+        $this->Audit_model->log(
+            'user_warehouses_assign',
+            'user_warehouses',
+            (int)$user_id,
+            "تحديث تعيين مستودعات المستخدم #{$user_id}",
+            array('assigned_warehouse_ids' => array_values($clean_ids))
+        );
     }
 
     /**
