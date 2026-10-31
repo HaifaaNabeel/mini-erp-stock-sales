@@ -95,3 +95,19 @@ $route['stock/movements'] = 'stock_movements/index';
 $route['stock/movements/in'] = 'stock_movements/create_in';
 $route['stock/movements/adjust'] = 'stock_movements/create_adjustment';
 $route['stock/movements/ajax_get_stock'] = 'stock_movements/ajax_get_stock';
+
+// F07: Customers Management (Admin and Sales)
+$route['customers'] = 'customers/index';
+$route['customers/create'] = 'customers/create';
+$route['customers/edit/(:num)'] = 'customers/edit/$1';
+$route['customers/activate/(:num)'] = 'customers/activate/$1';
+$route['customers/deactivate/(:num)'] = 'customers/deactivate/$1';
+$route['customers/toggle_status/(:num)'] = 'customers/toggle_status/$1';
+
+// F07: Sales Invoices (Admin and Sales)
+$route['sales/invoices'] = 'sales_invoices/index';
+$route['sales/invoices/create'] = 'sales_invoices/create';
+$route['sales/invoices/ajax_get_products'] = 'sales_invoices/ajax_get_products';
+$route['sales/invoices/print/(:num)'] = 'sales_invoices/print_invoice/$1';
+$route['sales/invoices/view/(:num)'] = 'sales_invoices/view/$1';
+
