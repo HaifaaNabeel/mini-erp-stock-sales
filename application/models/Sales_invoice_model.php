@@ -902,4 +902,265 @@ class Sales_invoice_model extends MY_Model
             'message'         => 'تم استرجاع الفاتورة المنشأة مسبقاً لهذا الرمز دون تكرار الخصم أو الإنشاء.'
         );
     }
+
+    /**
+     * Cancel an active sales invoice atomically (F08)
+     *
+     * Business rules:
+     * 1. Admin only.
+     * 2. Cannot cancel an already cancelled invoice (ALREADY_CANCELLED).
+     * 3. Cannot delete invoice or line items; preserve all historical records.
+     * 4. Cancellation reason is mandatory (min 5 chars, max 255 chars).
+     * 5. Atomically restore warehouse stock for each item sold.
+     * 6. Create 'sale_reversal' stock movements linked to original 'sale' movements.
+     * 7. Enforces single database transaction; rolls back completely on any error.
+     *
+     * @param int $invoice_id Sales invoice ID
+     * @param string $cancellation_reason Mandatory reason (>= 5 chars)
+     * @param object $user Current authenticated user object (must be admin)
+     * @return array Result array with success flag, invoice data, or error details
+     */
+    public function cancel_invoice($invoice_id, $cancellation_reason, $user)
+    {
+        // -------------------------------------------------------------
+        // 1. Pre-validation: Input ID & User Role (Admin only)
+        // -------------------------------------------------------------
+        $valid_id = filter_var($invoice_id, FILTER_VALIDATE_INT, array(
+            'options' => array('min_range' => 1, 'max_range' => self::MAX_UNSIGNED_INT)
+        ));
+
+        if ($valid_id === FALSE) {
+            return array('success' => FALSE, 'error' => 'معرف الفاتورة غير صالح.', 'error_code' => 'INVALID_INVOICE_ID');
+        }
+
+        if (!is_object($user) || empty($user->id)) {
+            return array('success' => FALSE, 'error' => 'بيانات المستخدم غير صالحة.', 'error_code' => 'INVALID_USER');
+        }
+
+        $role_name = isset($user->role_name) ? $user->role_name : NULL;
+        if ($role_name === NULL && isset($user->role_id)) {
+            $user_row = $this->db->select('r.name AS role_name')
+                ->from('users u')
+                ->join('roles r', 'r.id = u.role_id')
+                ->where('u.id', $user->id)
+                ->get()->row();
+            $role_name = $user_row ? $user_row->role_name : NULL;
+        }
+
+        if ($role_name !== 'admin') {
+            return array('success' => FALSE, 'error' => 'إلغاء الفواتير متاح حصراً لمدير النظام (Admin).', 'error_code' => 'PERMISSION_DENIED');
+        }
+
+        // -------------------------------------------------------------
+        // 2. Pre-validation: Cancellation Reason (5 to 255 chars)
+        // -------------------------------------------------------------
+        $clean_reason = trim((string)$cancellation_reason);
+        $reason_len = mb_strlen($clean_reason, 'UTF-8');
+
+        if ($reason_len < 5) {
+            return array('success' => FALSE, 'error' => 'سبب الإلغاء إلزامي ويجب ألا يقل عن 5 أحرف.', 'error_code' => 'INVALID_CANCELLATION_REASON');
+        }
+
+        if ($reason_len > 255) {
+            return array('success' => FALSE, 'error' => 'سبب الإلغاء يجب ألا يتجاوز 255 حرفاً.', 'error_code' => 'CANCELLATION_REASON_TOO_LONG');
+        }
+
+        // -------------------------------------------------------------
+        // 3. Begin ACID Database Transaction
+        // -------------------------------------------------------------
+        $previous_debug = $this->db->db_debug;
+        $this->db->db_debug = FALSE;
+
+        try {
+            $trans_started = $this->db->trans_begin();
+            if ($trans_started === FALSE) {
+                return array('success' => FALSE, 'error' => 'فشل بدء المعاملة في قاعدة البيانات.', 'error_code' => 'TRANS_BEGIN_FAILED');
+            }
+
+            // 3.1 Lock Invoice Header exclusively (SELECT ... FOR UPDATE)
+            $inv_lock_sql = "SELECT * FROM `{$this->table}` WHERE `id` = ? FOR UPDATE";
+            $inv_lock_query = $this->db->query($inv_lock_sql, array($valid_id));
+
+            if ($inv_lock_query === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل قفل سجل الفاتورة.', 'error_code' => 'INVOICE_LOCK_FAILED');
+            }
+
+            $invoice_row = $inv_lock_query->row();
+            if (!$invoice_row) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'الفاتورة المطلوبة غير موجودة.', 'error_code' => 'INVOICE_NOT_FOUND');
+            }
+
+            // 3.2 Verify Invoice Status (prevent duplicate cancellation)
+            if ($invoice_row->status === 'cancelled') {
+                $this->db->trans_rollback();
+                return array(
+                    'success'             => FALSE,
+                    'error'               => 'هذه الفاتورة ملغاة بالفعل ولا يمكن إلغاؤها مجدداً.',
+                    'error_code'          => 'ALREADY_CANCELLED',
+                    'invoice_id'          => (int)$invoice_row->id,
+                    'invoice_number'      => $invoice_row->invoice_number,
+                    'cancelled_at'        => $invoice_row->cancelled_at,
+                    'cancelled_by'        => $invoice_row->cancelled_by,
+                    'cancellation_reason' => $invoice_row->cancellation_reason,
+                );
+            }
+
+            if ($invoice_row->status !== 'active') {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'حالة الفاتورة غير صالحة للإلغاء.', 'error_code' => 'INVALID_INVOICE_STATUS');
+            }
+
+            $warehouse_id = (int)$invoice_row->warehouse_id;
+
+            // 3.3 Lock Warehouse and verify active status
+            $wh_lock_sql = "SELECT `id`, `name`, `is_active` FROM `warehouses` WHERE `id` = ? FOR UPDATE";
+            $wh_lock_query = $this->db->query($wh_lock_sql, array($warehouse_id));
+
+            if ($wh_lock_query === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل قفل بيانات المستودع.', 'error_code' => 'WAREHOUSE_LOCK_FAILED');
+            }
+
+            // 3.4 Retrieve and lock original 'sale' stock movements for this invoice
+            $sm_lock_sql = "SELECT * FROM `{$this->movement_table}` WHERE `sales_invoice_id` = ? AND `movement_type` = 'sale' ORDER BY `id` ASC FOR UPDATE";
+            $sm_lock_query = $this->db->query($sm_lock_sql, array($valid_id));
+
+            if ($sm_lock_query === FALSE || $this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل استرجاع حركات البيع المرتبطة بالفاتورة.', 'error_code' => 'MOVEMENTS_LOCK_FAILED');
+            }
+
+            $orig_movements = $sm_lock_query->result();
+            if (empty($orig_movements)) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'لم يتم العثور على حركات بيع أصلية مرتبطة بهذه الفاتورة لاسترجاعها.', 'error_code' => 'NO_SALE_MOVEMENTS_FOUND');
+            }
+
+            // 3.5 Verify no reversal movement already exists for this invoice
+            $existing_rev_sql = "SELECT `id` FROM `{$this->movement_table}` WHERE `sales_invoice_id` = ? AND `movement_type` = 'sale_reversal' LIMIT 1 FOR UPDATE";
+            $existing_rev_query = $this->db->query($existing_rev_sql, array($valid_id));
+
+            if ($existing_rev_query !== FALSE && $existing_rev_query->num_rows() > 0) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'توجد حركات إلغاء مسجلة مسبقاً لهذه الفاتورة.', 'error_code' => 'ALREADY_CANCELLED');
+            }
+
+            $now_dt = date('Y-m-d H:i:s');
+
+            // 3.6 For each original movement, restore stock and insert reversal movement
+            foreach ($orig_movements as $orig_sm) {
+                $product_id = (int)$orig_sm->product_id;
+                $restored_qty = abs((int)$orig_sm->quantity_delta);
+
+                if ($restored_qty <= 0) {
+                    $this->db->trans_rollback();
+                    return array('success' => FALSE, 'error' => 'كمية حركة البيع الأصلية غير صالحة للاسترجاع.', 'error_code' => 'INVALID_REVERSAL_QUANTITY');
+                }
+
+                // Lock warehouse stock for this product
+                $stock_lock_sql = "SELECT `id`, `quantity` FROM `{$this->stock_table}` WHERE `warehouse_id` = ? AND `product_id` = ? FOR UPDATE";
+                $stock_lock_query = $this->db->query($stock_lock_sql, array($warehouse_id, $product_id));
+
+                if ($stock_lock_query === FALSE || $this->db->trans_status() === FALSE) {
+                    $this->db->trans_rollback();
+                    return array('success' => FALSE, 'error' => 'فشل قفل رصيد المستودع للمنتج رقم ' . $product_id, 'error_code' => 'STOCK_LOCK_FAILED');
+                }
+
+                $stock_row = $stock_lock_query->row();
+                if (!$stock_row) {
+                    $this->db->trans_rollback();
+                    return array('success' => FALSE, 'error' => 'سجل رصيد المستودع غير موجود للمنتج رقم ' . $product_id, 'error_code' => 'STOCK_NOT_FOUND');
+                }
+
+                $before_qty = (int)$stock_row->quantity;
+                $after_qty  = $before_qty + $restored_qty;
+
+                // Update warehouse_stock
+                $update_stock_sql = "UPDATE `{$this->stock_table}` SET `quantity` = ?, `updated_at` = ? WHERE `id` = ?";
+                $update_stock_res = $this->db->query($update_stock_sql, array($after_qty, $now_dt, $stock_row->id));
+
+                if ($update_stock_res === FALSE || $this->db->trans_status() === FALSE) {
+                    $this->db->trans_rollback();
+                    return array('success' => FALSE, 'error' => 'فشل تحديث رصيد المستودع للمنتج رقم ' . $product_id, 'error_code' => 'STOCK_UPDATE_FAILED');
+                }
+
+                // Format reversal reason within VARCHAR(255)
+                $rev_reason = sprintf('إلغاء فاتورة مبيعات %s: %s', $invoice_row->invoice_number, $clean_reason);
+                if (mb_strlen($rev_reason, 'UTF-8') > 255) {
+                    $rev_reason = mb_substr($rev_reason, 0, 252, 'UTF-8') . '...';
+                }
+
+                // Insert reversal movement (movement_type = 'sale_reversal', strictly positive delta)
+                $reversal_insert = array(
+                    'warehouse_id'            => $warehouse_id,
+                    'product_id'              => $product_id,
+                    'movement_type'           => 'sale_reversal',
+                    'quantity_delta'          => $restored_qty, // positive
+                    'before_quantity'         => $before_qty,
+                    'after_quantity'          => $after_qty,
+                    'reason'                  => $rev_reason,
+                    'idempotency_key'         => bin2hex(random_bytes(16)),
+                    'sales_invoice_id'        => $invoice_row->id,
+                    'reversal_of_movement_id' => $orig_sm->id,
+                    'created_by'              => (int)$user->id,
+                    'created_at'              => $now_dt,
+                );
+
+                $insert_rev_res = $this->db->insert($this->movement_table, $reversal_insert);
+                $db_err = $this->db->error();
+
+                if ($insert_rev_res === FALSE || $this->db->trans_status() === FALSE || !empty($db_err['code'])) {
+                    $this->db->trans_rollback();
+                    return array('success' => FALSE, 'error' => 'فشل تسجيل حركة المخزون العكسية.', 'error_code' => 'REVERSAL_MOVEMENT_FAILED');
+                }
+            }
+
+            // 3.7 Update Sales Invoice Header (status = 'cancelled', cancelled_at, cancelled_by, cancellation_reason)
+            $invoice_update = array(
+                'status'              => 'cancelled',
+                'cancelled_at'        => $now_dt,
+                'cancelled_by'        => (int)$user->id,
+                'cancellation_reason' => $clean_reason,
+                'updated_at'          => $now_dt,
+            );
+
+            $update_inv_res = $this->db->where('id', $invoice_row->id)->update($this->table, $invoice_update);
+            $db_err = $this->db->error();
+
+            if ($update_inv_res === FALSE || $this->db->trans_status() === FALSE || !empty($db_err['code'])) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل تحديث حالة الفاتورة إلى ملغاة.', 'error_code' => 'INVOICE_CANCEL_UPDATE_FAILED');
+            }
+
+            // 3.8 Commit Transaction
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                return array('success' => FALSE, 'error' => 'فشل إتمام معاملة إلغاء الفاتورة.', 'error_code' => 'TRANS_COMMIT_FAILED');
+            }
+
+            $this->db->trans_commit();
+
+            return array(
+                'success'             => TRUE,
+                'invoice_id'          => (int)$invoice_row->id,
+                'invoice_number'      => $invoice_row->invoice_number,
+                'status'              => 'cancelled',
+                'cancelled_at'        => $now_dt,
+                'cancelled_by'        => (int)$user->id,
+                'cancellation_reason' => $clean_reason,
+                'restored_items'      => count($orig_movements),
+                'error'               => NULL,
+                'message'             => 'تم إلغاء الفاتورة وإعادة كميات المخزون بنجاح.'
+            );
+
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            log_message('error', 'Sales_invoice_model::cancel_invoice exception: ' . $e->getMessage());
+            return array('success' => FALSE, 'error' => 'حدث خطأ غير متوقع أثناء إلغاء الفاتورة.', 'error_code' => 'EXCEPTION_CAUGHT');
+        } finally {
+            $this->db->db_debug = $previous_debug;
+        }
+    }
 }

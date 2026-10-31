@@ -343,5 +343,76 @@ class Sales_invoices extends Auth_Controller
         // Render standalone view without layout chrome
         $this->render_view('sales_invoices/print', $data, FALSE);
     }
-}
 
+    /**
+     * Cancel an active sales invoice (Admin only, POST)
+     *
+     * @param int $id Invoice ID
+     * @return void
+     */
+    public function cancel($id)
+    {
+        // 1. Authorization: Strictly Admin only
+        if (!$this->is_admin()) {
+            $this->session->set_flashdata('error', 'إلغاء الفواتير متاح حصراً لمدير النظام (Admin).');
+            redirect('sales/invoices');
+            return;
+        }
+
+        // 2. HTTP Method: Strictly POST
+        if ($this->input->method() !== 'post') {
+            show_404();
+            return;
+        }
+
+        $valid_id = filter_var($id, FILTER_VALIDATE_INT, array(
+            'options' => array('min_range' => 1)
+        ));
+
+        if ($valid_id === FALSE) {
+            $this->session->set_flashdata('error', 'معرف الفاتورة غير صالح.');
+            redirect('sales/invoices');
+            return;
+        }
+
+        $invoice = $this->Sales_invoice_model->get_by_id($valid_id);
+        if (!$invoice) {
+            $this->session->set_flashdata('error', 'الفاتورة المطلوبة غير موجودة.');
+            redirect('sales/invoices');
+            return;
+        }
+
+        if ($invoice->status === 'cancelled') {
+            $this->session->set_flashdata('error', 'هذه الفاتورة ملغاة بالفعل ولا يمكن إلغاؤها مجدداً.');
+            redirect('sales/invoices/view/' . $valid_id);
+            return;
+        }
+
+        // Validate cancellation reason
+        $reason = trim((string)$this->input->post('cancellation_reason'));
+        $reason_len = mb_strlen($reason, 'UTF-8');
+
+        if ($reason_len < 5) {
+            $this->session->set_flashdata('error', 'سبب الإلغاء إلزامي ويجب ألا يقل عن 5 أحرف.');
+            redirect('sales/invoices/view/' . $valid_id);
+            return;
+        }
+
+        if ($reason_len > 255) {
+            $this->session->set_flashdata('error', 'سبب الإلغاء يجب ألا يتجاوز 255 حرفاً.');
+            redirect('sales/invoices/view/' . $valid_id);
+            return;
+        }
+
+        // Execute atomic cancellation
+        $result = $this->Sales_invoice_model->cancel_invoice($valid_id, $reason, $this->current_user);
+
+        if ($result['success']) {
+            $this->session->set_flashdata('success', 'تم إلغاء الفاتورة رقم ' . $invoice->invoice_number . ' وإعادة كميات المخزون بنجاح.');
+        } else {
+            $this->session->set_flashdata('error', $result['error'] ? $result['error'] : 'فشل إلغاء الفاتورة.');
+        }
+
+        redirect('sales/invoices/view/' . $valid_id);
+    }
+}
