@@ -479,7 +479,7 @@ $inv_data = array(
     'warehouse_id'        => $wh_a_id,
     'invoice_date'        => date('Y-m-d'),
     'discount_percentage' => 10.00,
-    'idempotency_key'     => 'f10_inv_idem_' . uniqid('', true)
+    'idempotency_key'     => 'f10_inv_idem_' . md5(uniqid('', true))
 );
 
 $inv_res = $CI->Sales_invoice_model->create_invoice($inv_data, $invoice_items, $sales_user_obj);
@@ -683,20 +683,40 @@ echo "\n";
 echo "--- TEARDOWN TEST FIXTURES ---\n";
 
 // Delete sales invoice items, invoice and movements created in test
-$db->where('sales_invoice_id', $f10_inv_id)->delete('stock_movements');
-$db->where('sales_invoice_id', $f10_inv_id)->delete('sales_invoice_items');
-$db->where('id', $f10_inv_id)->delete('sales_invoices');
-$db->where('id', $in_movement_id)->delete('stock_movements');
-$db->where('id', $adj_movement_id)->delete('stock_movements');
+if ($f10_inv_id) {
+    // Delete reversal movements first because they reference original sale movements via reversal_of_movement_id
+    $db->where('sales_invoice_id', $f10_inv_id)->where('movement_type', 'sale_reversal')->delete('stock_movements');
+    $db->where('sales_invoice_id', $f10_inv_id)->delete('stock_movements');
+    $db->where('invoice_id', $f10_inv_id)->delete('sales_invoice_items');
+    $db->where('id', $f10_inv_id)->delete('sales_invoices');
+    $db->where('sequence_date', date('Y-m-d'))->delete('invoice_sequences');
+}
+if ($in_movement_id) {
+    $db->where('id', $in_movement_id)->delete('stock_movements');
+}
+if ($adj_movement_id) {
+    $db->where('id', $adj_movement_id)->delete('stock_movements');
+}
 
-$db->where('id', $p_id)->delete('products');
-$db->where('id', $cat_id)->delete('categories');
-$db->where('id', $cust_id)->delete('customers');
-
-$db->where_in('warehouse_id', array($wh_a_id, $wh_b_id, $wh_c_id))->delete('warehouse_stock');
-$db->where_in('id', array($wh_a_id, $wh_b_id, $wh_c_id))->delete('warehouses');
-
+// 1. Delete user_warehouses associations first to satisfy foreign keys
+$db->where_in('warehouse_id', array($wh_a_id, $wh_b_id, $wh_c_id))->delete('user_warehouses');
 $db->where_in('user_id', array($test_wh_id, $test_sales_id, $inactive_id))->delete('user_warehouses');
+
+// 2. Delete warehouse_stock before products and warehouses to satisfy foreign key constraints
+$db->where_in('warehouse_id', array($wh_a_id, $wh_b_id, $wh_c_id))->delete('warehouse_stock');
+if ($p_id) {
+    $db->where('product_id', $p_id)->delete('warehouse_stock');
+    $db->where('id', $p_id)->delete('products');
+}
+if ($cat_id) {
+    $db->where('id', $cat_id)->delete('categories');
+}
+if ($cust_id) {
+    $db->where('id', $cust_id)->delete('customers');
+}
+
+// 3. Now delete warehouses and users safely
+$db->where_in('id', array($wh_a_id, $wh_b_id, $wh_c_id))->delete('warehouses');
 $db->where_in('id', array($test_wh_id, $test_sales_id, $inactive_id))->delete('users');
 
 // Teardown audit logs generated during this test run so baseline is maintained

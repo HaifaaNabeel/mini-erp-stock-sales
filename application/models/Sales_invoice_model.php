@@ -804,10 +804,10 @@ class Sales_invoice_model extends MY_Model
                 'customer_id'         => (int)$customer_id,
                 'warehouse_id'        => (int)$warehouse_id,
                 'subtotal'            => (float)$subtotal,
-                'discount_percentage' => (float)$discount_percentage,
+                'discount_percentage' => (float)$discount_pct,
                 'discount_amount'     => (float)$discount_amount,
                 'total_amount'        => (float)$total_amount,
-                'items_count'         => count($processed_items),
+                'items_count'         => count($verified_lines),
                 'currency_code'       => 'SAR'
             );
             $audit_logged = $this->Audit_model->log(
@@ -843,6 +843,14 @@ class Sales_invoice_model extends MY_Model
                 'total_amount'    => $total_amount,
                 'currency_code'   => 'SAR',
                 'error'           => NULL
+            );
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            log_message('error', 'Sales_invoice_model::create_invoice exception: ' . $e->getMessage());
+            return array(
+                'success'    => FALSE,
+                'error'      => 'حدث خطأ غير متوقع أثناء حفظ الفاتورة.',
+                'error_code' => 'EXCEPTION_CAUGHT'
             );
         } finally {
             $this->db->db_debug = $previous_debug;
@@ -1173,7 +1181,7 @@ class Sales_invoice_model extends MY_Model
                 'warehouse_id'         => (int)$invoice_row->warehouse_id,
                 'total_amount'         => (float)$invoice_row->total_amount,
                 'cancellation_reason'  => $clean_reason,
-                'restored_items_count' => count($reversal_movements)
+                'restored_items_count' => count($orig_movements)
             );
             $audit_logged = $this->Audit_model->log(
                 'invoice_cancel',
@@ -1210,7 +1218,7 @@ class Sales_invoice_model extends MY_Model
                 'message'             => 'تم إلغاء الفاتورة وإعادة كميات المخزون بنجاح.'
             );
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $this->db->trans_rollback();
             log_message('error', 'Sales_invoice_model::cancel_invoice exception: ' . $e->getMessage());
             return array('success' => FALSE, 'error' => 'حدث خطأ غير متوقع أثناء إلغاء الفاتورة.', 'error_code' => 'EXCEPTION_CAUGHT');
