@@ -78,6 +78,51 @@
 
 ---
 
+### F05 — إدارة أرصدة المخزون بالمستودعات (`database/schema_f05_stock.sql`)
+
+- **المحرك والترميز:** MariaDB 10.4.32 / InnoDB / `utf8mb4_unicode_ci`.
+- **الجدول:** `warehouse_stock`
+- **الحقول:**
+  - `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`.
+  - `warehouse_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `warehouses.id` مع `RESTRICT`).
+  - `product_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `products.id` مع `RESTRICT`).
+  - `quantity`: `INT NOT NULL DEFAULT 0` (رصيد المخزون، يقبل أعداداً صحيحة فقط).
+  - `reorder_level`: `INT NOT NULL DEFAULT 0` (حد إعادة الطلب).
+  - `created_at`: `DATETIME NOT NULL`.
+  - `updated_at`: `DATETIME NULL DEFAULT NULL`.
+- **القيود والفهارس:**
+  - `uk_warehouse_product`: `UNIQUE KEY (warehouse_id, product_id)`.
+  - `chk_stock_quantity_nonneg`: `CHECK (quantity >= 0)`.
+  - `chk_stock_reorder_nonneg`: `CHECK (reorder_level >= 0)`.
+
+---
+
+### F06 — حركات المخزون (`database/schema_f06_stock_movements.sql`)
+
+- **المحرك والترميز:** MariaDB 10.4.32 / InnoDB / `utf8mb4_unicode_ci`.
+- **الجدول:** `stock_movements`
+- **الحقول:**
+  - `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`.
+  - `warehouse_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `warehouses.id` مع `RESTRICT`).
+  - `product_id`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `products.id` مع `RESTRICT`).
+  - `movement_type`: `ENUM('in', 'adjustment') NOT NULL`.
+  - `quantity_delta`: `INT NOT NULL` (التغير في الكمية، عدد صحيح غير صفري).
+  - `before_quantity`: `INT NOT NULL DEFAULT 0` (الرصيد قبل الحركة، غير سالب).
+  - `after_quantity`: `INT NOT NULL DEFAULT 0` (الرصيد بعد الحركة، غير سالب).
+  - `reason`: `VARCHAR(255) NULL DEFAULT NULL` (سبب الحركة، إلزامي للتسوية).
+  - `idempotency_key`: `VARCHAR(64) NOT NULL UNIQUE` (رمز العملية الفريد لمنع التكرار).
+  - `created_by`: `INT UNSIGNED NOT NULL` (مفتاح خارجي لـ `users.id` مع `RESTRICT`).
+  - `created_at`: `DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`.
+- **قيود سلامة البيانات (CHECK Constraints):**
+  - `chk_sm_qty_delta_nonzero`: `CHECK (quantity_delta <> 0)`
+  - `chk_sm_before_qty_nonneg`: `CHECK (before_quantity >= 0)`
+  - `chk_sm_after_qty_nonneg`: `CHECK (after_quantity >= 0)`
+  - `chk_sm_math_balance`: `CHECK (after_quantity = before_quantity + quantity_delta)`
+  - `chk_sm_in_positive`: `CHECK (movement_type <> 'in' OR quantity_delta > 0)`
+  - `chk_sm_adjustment_reason`: `CHECK (movement_type <> 'adjustment' OR (reason IS NOT NULL AND CHAR_LENGTH(TRIM(reason)) >= 5))`
+
+---
+
 ## إعداد أول مدير نظام يدويًا عبر phpMyAdmin (Initial Admin Setup)
 
 وفق متطلبات الأمان والتأسيس المعتمدة:

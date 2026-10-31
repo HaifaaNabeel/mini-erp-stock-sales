@@ -89,3 +89,9 @@ $route['products/toggle_status/(:num)'] = 'products/toggle_status/$1';
 // F05: Warehouse Stock Management (Admin, Warehouse, Sales)
 $route['stock'] = 'stock/index';
 $route['stock/edit_reorder/(:num)'] = 'stock/edit_reorder/$1';
+
+// F06: Stock Movements (Admin, Warehouse, Sales)
+$route['stock/movements'] = 'stock_movements/index';
+$route['stock/movements/in'] = 'stock_movements/create_in';
+$route['stock/movements/adjust'] = 'stock_movements/create_adjustment';
+$route['stock/movements/ajax_get_stock'] = 'stock_movements/ajax_get_stock';
