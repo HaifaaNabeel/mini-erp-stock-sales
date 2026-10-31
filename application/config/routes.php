@@ -111,3 +111,17 @@ $route['sales/invoices/ajax_get_products'] = 'sales_invoices/ajax_get_products';
 $route['sales/invoices/print/(:num)'] = 'sales_invoices/print_invoice/$1';
 $route['sales/invoices/view/(:num)'] = 'sales_invoices/view/$1';
 $route['sales/invoices/cancel/(:num)'] = 'sales_invoices/cancel/$1';
+
+
+// F09: Reports, Business Insights & CSV Export (Admin, Warehouse, Sales scoped)
+$route['reports'] = 'reports/index';
+$route['reports/stock'] = 'reports/stock_balances';
+$route['reports/stock/export'] = 'reports/export_stock_csv';
+$route['reports/stock_movements'] = 'reports/stock_movements';
+$route['reports/stock_movements/export'] = 'reports/export_stock_movements_csv';
+$route['reports/sales'] = 'reports/sales_summary';
+$route['reports/sales/export'] = 'reports/export_sales_csv';
+$route['reports/invoices'] = 'reports/invoices';
+$route['reports/invoices/export'] = 'reports/export_invoices_csv';
+$route['reports/low_stock'] = 'reports/low_stock';
+$route['reports/low_stock/export'] = 'reports/export_low_stock_csv';

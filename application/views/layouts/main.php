@@ -813,18 +813,17 @@
             <?php endif; ?>
 
             <!-- Reports Section -->
-            <?php if (isset($current_user) && $current_user->role_name === 'admin'): ?>
             <div class="nav-category">التقارير وسجل التدقيق</div>
             <ul class="nav-list">
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F09 القادمة">
+                    <a href="<?php echo site_url('reports'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'reports') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
-                            <span class="nav-icon">📈</span>
+                            <span class="nav-icon">📊</span>
                             <span>التقارير</span>
                         </span>
-                        <span class="nav-tag">F09</span>
                     </a>
                 </li>
+                <?php if (isset($current_user) && $current_user->role_name === 'admin'): ?>
                 <li class="nav-item">
                     <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F10 القادمة">
                         <span class="nav-link-content">
@@ -834,8 +833,8 @@
                         <span class="nav-tag">F10</span>
                     </a>
                 </li>
+                <?php endif; ?>
             </ul>
-            <?php endif; ?>
         </div>
 
         <!-- Sidebar Footer -->
