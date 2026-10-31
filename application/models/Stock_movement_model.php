@@ -536,7 +536,7 @@ class Stock_movement_model extends MY_Model
             $action_code = ($movement_type === 'in') ? 'stock_in' : 'stock_adjustment';
             $audit_details = ($movement_type === 'in')
                 ? "إضافة مخزون (توريد) للمنتج #{$product_id} في المستودع #{$warehouse_id} بكمية +{$quantity_delta}"
-                : "تسوية مخزون للمنتج #{$product_id} في المستودع #{$warehouse_id} بتغير {$quantity_delta} (السبب: {$reason})";
+                : "تسوية مخزون للمنتج #{$product_id} في المستودع #{$warehouse_id} بتغير {$quantity_delta} (السبب: {$normalized_reason})";
 
             $audit_meta = array(
                 'warehouse_id'     => (int)$warehouse_id,
@@ -545,7 +545,7 @@ class Stock_movement_model extends MY_Model
                 'quantity_delta'   => (int)$quantity_delta,
                 'before_quantity'  => (int)$before_quantity,
                 'after_quantity'   => (int)$after_quantity,
-                'reason'           => $reason,
+                'reason'           => $normalized_reason,
                 'idempotency_key'  => $idempotency_key
             );
 
@@ -588,6 +588,14 @@ class Stock_movement_model extends MY_Model
                 'message'         => 'تم تسجيل حركة المخزون وتحديث الرصيد بنجاح.'
             );
 
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            log_message('error', 'Stock_movement_model::process_movement exception: ' . $e->getMessage());
+            return array(
+                'success'    => FALSE,
+                'error'      => 'حدث خطأ غير متوقع أثناء معالجة حركة المخزون.',
+                'error_code' => 'EXCEPTION_CAUGHT'
+            );
         } finally {
             // Guarantee restoration of db_debug under all execution branches
             $this->db->db_debug = $previous_debug;
