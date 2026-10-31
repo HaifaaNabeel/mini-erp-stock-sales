@@ -966,3 +966,99 @@ ALTER TABLE warehouse_stock
 ### ما لم يُختبر / قيود البيئة الحالية
 - اختبار التفاعل البشري المباشر عبر المتصفح وجلسات HTTP المتزامنة في نفس اللحظة (تمت محاكاتها برمجياً عبر اختبارات التكرار والتعارض).
 - لم يُنفذ أي إجراء Git Commit أو Push وفقاً لقواعد المشروع.
+
+
+---
+
+## 15. F07 — Sales Invoices (فواتير المبيعات) — توثيق مراحل التنفيذ المتكاملة
+
+- **تاريخ التنفيذ:** 2026-10-31
+- **الفرع:** `feature/F07-sales-invoices`
+- **الحالة:** مكتمل بنجاح (المراحل 1، 2، 3) ومفحوص مؤتمتاً بنسبة 100%.
+
+### 1. ملخص الإنجاز المكتمل
+تم إنجاز ميزة فواتير المبيعات F07 بالكامل وفق المتطلبات المعتمدة وقرارات التصميم، متضمنة:
+1. **المخطط وقاعدة البيانات:**
+   - تطبيق `database/schema_f07_sales_invoices.sql` وإنشاء جداول: `customers`، `invoice_sequences`، `sales_invoices`، `sales_invoice_items`.
+   - توسعة جدول `stock_movements` بإضافة عمود `sales_invoice_id` وعمود `reversal_of_movement_id` وقيد `uk_sm_reversal_of` وتوسيع ENUM لأنواع الحركات بإضافة `sale` و `sale_reversal`.
+   - فرض 23 قيد MariaDB CHECK Constraint بما يشمل التحقق الصارم من العملة `CHECK (BINARY currency_code = 'SAR')`.
+2. **طبقة البيانات ونماذج المعاملات (Phase 1):**
+   - بناء `Customer_model.php`: استرجاع، بحث، ترقيم، إضافة، تعديل، وتعطيل مرن Soft-disable.
+   - بناء `Sales_invoice_model.php`: المعاملات الذرية `create_invoice()` تحت `trans_begin()`، الترقيم اليومي الذري `INV-YYYYMMDD-XXXX` بالاعتماد على جدول العداد، قفل صفي `FOR UPDATE` على المستودع والمنتجات والأرصدة، الحسابات المالية الدقيقة وفق `PHP_ROUND_HALF_UP`، الخصم على مستوى الفاتورة (0% إلى 100%)، تسجيل بنود الفاتورة وحركات البيع `sale` بالكمية السالبة، التحقق الحساس من مفتاح عدم التكرار Idempotency مع كشف التعارض `IDEMPOTENCY_CONFLICT` وإعادة الطلب المتطابق `is_replay`.
+   - اختبارات التزامن الفعلي المتعدد عبر عمليات مستقلة CLI بنجاح 100%.
+3. **طبقة المتحكمات وتصفح الفواتير والعملاء (Phase 2):**
+   - بناء `Customers.php` وواجهات العملاء `customers/index.php`، `customers/create.php`، `customers/edit.php`.
+   - بناء `Sales_invoices.php` وواجهات استعراض الفواتير `sales_invoices/index.php` و `sales_invoices/view.php`.
+   - حصر صلاحيات العملاء والفواتير بدور Admin و Sales، وحظر مستخدم المستودع Warehouse تماماً.
+   - تطبيق النطاق الصارم لمسؤول المبيعات Sales لعرض فواتيره فقط داخل مستودعاته المخصصة.
+4. **واجهة إنشاء الفاتورة التفاعلية والطباعة المخصصة (Phase 3):**
+   - واجهة إنشاء الفاتورة `sales_invoices/create.php`:
+     - اختيار العميل النشط فقط والمستودع المتاح حسب الصلاحية (Admin: جميع المستودعات النشطة، Sales: المستودعات المخصصة والنشطة فقط).
+     - نقطة نهاية AJAX `sales/invoices/ajax_get_products` لجلب المنتجات وأرصدتها اللحظية حسب المستودع المختار مع التحقق من الصلاحيات.
+     - منع تكرار إضافة المنتج نفسه في أسطر منفصلة وزيادة كميته وإبراز السطر.
+     - تعديل الكميات وحذف الأسطر وحسابات مالية فورية (Subtotal, Discount, Grand Total).
+     - حماية النموذج برمز Idempotency فريد لمنع الإرسال المزدوج وحماية CSRF.
+   - صفحة الطباعة المخصصة `sales_invoices/print.php`:
+     - واجهة A4 مستقلة ونظيفة تماماً من أشرطة التنقل والقوائم الجانبية.
+     - تنسيقات طباعة `@media print` وأزرار تحكم مخفية عند الطباعة `.no-print`.
+     - اعتماد طباعة المتصفح النقية دون مكتبات خارجية.
+     - إخضاع صفحة الطباعة لنفس قيود الصلاحيات الصارمة.
+
+### 2. الملفات المنشأة والمعدلة
+1. `database/schema_f07_sales_invoices.sql` (ملف المخطط المعتمد)
+2. `application/models/Customer_model.php` (نموذج العملاء)
+3. `application/models/Sales_invoice_model.php` (نموذج فواتير المبيعات والمعاملات الذرية)
+4. `application/controllers/Customers.php` (متحكم إدارة العملاء)
+5. `application/controllers/Sales_invoices.php` (متحكم الفواتير والإنشاء والطباعة وAJAX)
+6. `application/views/customers/index.php` (قائمة العملاء)
+7. `application/views/customers/create.php` (إضافة عميل)
+8. `application/views/customers/edit.php` (تعديل عميل)
+9. `application/views/sales_invoices/index.php` (قائمة الفواتير والفلاتر)
+10. `application/views/sales_invoices/view.php` (تفاصيل الفاتورة)
+11. `application/views/sales_invoices/create.php` (شاشة إنشاء الفاتورة التفاعلية)
+12. `application/views/sales_invoices/print.php` (شاشة الطباعة المخصصة A4)
+13. `application/config/routes.php` (تسجيل مسارات F07 كاملة)
+14. `application/views/layouts/main.php` (عناصر القائمة الجانبية للعملاء وفواتير المبيعات)
+15. `tests/test_f07_models_verification.php` (58 اختباراً للنماذج وقواعد العمل)
+16. `tests/f07_concurrent_worker.php` و `tests/test_f07_concurrency_and_idempotency.php` (29 اختباراً للتزامن الفعلي)
+17. `tests/test_f07_controllers_verification.php` (48 اختباراً للمتحكمات والصلاحيات)
+18. `tests/test_f07_create_and_print_verification.php` (65 اختباراً لإنشاء الفواتير ونقاط AJAX والطباعة)
+
+### 3. نتائج الاختبارات التراكمية المؤتمتة
+تم تنفيذ كافة مجموعات الاختبارات بنجاح تام 100%:
+- `test_f06_verification.php`: 34/34 اختبار ناجح.
+- `test_f07_models_verification.php`: 58/58 اختبار ناجح.
+- `test_f07_concurrency_and_idempotency.php`: 29/29 اختبار ناجح.
+- `test_f07_controllers_verification.php`: 48/48 اختبار ناجح.
+- `test_f07_create_and_print_verification.php`: 65/65 اختبار ناجح.
+- **إجمالي الفحوصات الناجحة:** 234 اختباراً ناجحاً (0 فشل).
+- **سلامة قاعدة البيانات:** الأرصدة والبيانات الأساسية استُعيدت بدقة تامة (Stock=23, Movements=3, Invoices=0, Items=0, Customers=0, Users=2).
+
+---
+
+## 9. F07 — معالجة التبديل الصريح لحالة العميل (Explicit Customer Status Operations)
+- **تاريخ التنفيذ:** 2026-10-31.
+- **الهدف من التعديل:** استبدال آلية تبديل الحالة الضمنية `toggle_status` بعمليات صريحة وغير قابلة للتكرار العكسي (Idempotent):
+  1. تعطيل العميل: `is_active = 0` (تكرار الطلب يُبقي الحالة معطلة).
+  2. تفعيل العميل: `is_active = 1` (تكرار الطلب يُبقي الحالة نشطة).
+- **التعديلات المنجزة:**
+  - `application/models/Customer_model.php`:
+    - إضافة دوال صريحة: `activate($id)` و `deactivate($id)`.
+    - تحديث `set_status($id, $status)` لتكون Idempotent بالكامل؛ بحيث إذا كانت الحالة الحالية مطابقة للحالة المستهدفة تعود بنجاح فوري دون كتابة مكررة لقاعدة البيانات.
+    - الإبقاء على `toggle_status($id)` كـ Backward Compatibility Wrapper.
+  - `application/controllers/Customers.php`:
+    - إضافة إجراءات صريحة عبر POST فقط: `activate($id)` و `deactivate($id)` مع التحقق من وجود العميل ورسائل فلاش واضحة.
+  - `application/config/routes.php`:
+    - تسجيل المسارات الصريحة: `customers/activate/(:num)` و `customers/deactivate/(:num)`.
+  - `application/views/customers/index.php`:
+    - تحديث أزرار الإجراءات في واجهة المستخدم لترسل النماذج حصراً إلى `customers/deactivate` إذا كان العميل نشطاً، وإلى `customers/activate` إذا كان العميل معطلاً.
+  - `tests/test_f07_customer_explicit_status.php`:
+    - إنشاء حزمة اختبارات شاملة للتحقق من:
+      - التعطيل الصريح وتكرار طلب التعطيل 3 مرات مع ثبات الحالة على 0.
+      - التفعيل الصريح وتكرار طلب التفعيل 3 مرات مع ثبات الحالة على 1.
+      - رفض طلبات GET برمز 404.
+      - رفض غياب أو بطلان رمز CSRF برمز 403.
+      - التحقق الصارم من الصلاحيات (حظر الزائر وأمين المستودع، والسماح للمسؤول والمبيعات).
+- **نتائج الاختبارات:**
+  - `tests/test_f07_customer_explicit_status.php`: **37/37 اختباراً ناجحاً (0 فشل)**.
+  - الحفاظ التام على سلامة قاعدة البيانات بعد انتهاء الاختبارات.

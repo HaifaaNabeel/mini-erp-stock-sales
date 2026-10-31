@@ -52,6 +52,7 @@ temp/
 database/*.sql.gz
 database/*_dump.sql
 database/*_backup.sql
+database/backup_*.sql
 !database/*.example.sql
 !database/schema*.sql
 !database/migrations/

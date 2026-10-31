@@ -792,12 +792,21 @@
             <div class="nav-category">المبيعات</div>
             <ul class="nav-list">
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F07 القادمة">
+                    <a href="<?php echo site_url('customers'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'customers') ? 'active' : ''; ?>">
+                        <span class="nav-link-content">
+                            <span class="nav-icon">👥</span>
+                            <span>إدارة العملاء</span>
+                        </span>
+                        <span class="nav-tag nav-tag-active">F07</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="<?php echo site_url('sales/invoices'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'sales' && $this->uri->segment(2) === 'invoices') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">🧾</span>
                             <span>فواتير المبيعات</span>
                         </span>
-                        <span class="nav-tag">F07</span>
+                        <span class="nav-tag nav-tag-active">F07</span>
                     </a>
                 </li>
             </ul>
