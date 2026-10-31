@@ -877,3 +877,92 @@ ALTER TABLE warehouse_stock
 ### حالة Git عند الانتهاء
 
 **الفرع:** `feature/F05-warehouse-stock-management` — لم يُنفذ أي Commit أو Push أو Merge.
+
+---
+
+## F06 — حركات المخزون (Stock Movements — Full Implementation & Verification — 39/39 PASSED)
+
+- **تاريخ التنفيذ:** 2026-10-31
+- **الفرع (Git Branch):** `feature/F06-stock-movements`
+- **الهدف من المرحلة:** تنفيذ نظام حركات المخزون المعياري وفق بنية CodeIgniter 3، متضمناً عمليات إدخال المخزون (Stock In)، وتسوية المخزون (Stock Adjustment) بالإضافة والخصم، وسجل الحركات التاريخي الشامل مع الفلاتر والترقيم، وإلزامية سبب التسوية، والحماية من الرصيد السالب، وآلية Idempotency الذرية الصارمة.
+
+### الملفات التي تم إنشاؤها وتعديلها
+
+1. `database/schema_f06_stock_movements.sql` (ملف جديد):
+   - إنشاء جدول `stock_movements` بمحرك InnoDB وترميز `utf8mb4_unicode_ci`.
+   - قيد فريد `uk_sm_idempotency` على عمود `idempotency_key VARCHAR(64)`.
+   - فهارس مخصصة على: `warehouse_id`, `product_id`, `movement_type`, `created_at`, `created_by`.
+   - 3 مفاتيح أجنبية صارمة بسياسة `ON UPDATE RESTRICT ON DELETE RESTRICT`.
+   - 6 قيود تحقق إلزامية على مستوى قاعدة البيانات (MariaDB CHECK Constraints):
+     - `chk_sm_qty_delta_nonzero`: `quantity_delta <> 0`.
+     - `chk_sm_before_qty_nonneg`: `before_quantity >= 0`.
+     - `chk_sm_after_qty_nonneg`: `after_quantity >= 0`.
+     - `chk_sm_math_balance`: `after_quantity = before_quantity + quantity_delta`.
+     - `chk_sm_in_positive`: `movement_type <> 'in' OR quantity_delta > 0`.
+     - `chk_sm_adjustment_reason`: `movement_type <> 'adjustment' OR (reason IS NOT NULL AND CHAR_LENGTH(TRIM(reason)) >= 5)`.
+
+2. `application/models/Stock_movement_model.php` (ملف جديد):
+   - الفئة المركزية لمعالجة حركات المخزون ذرياً وتطبيق قواعد العمل.
+   - التحقق الصارم من الأعداد الصحيحة `filter_var(..., FILTER_VALIDATE_INT)`.
+   - فحص دقيق لرمز العملية Idempotency بصيغة `^[a-f0-9]{32}$`.
+   - معالجة ذرية كاملة تبدأ بـ `trans_begin()` وتتحقق من نجاحها قبل المتابعة.
+   - قفل صفي للمنتج والمستودع والرصيد عبر `FOR UPDATE`.
+   - إنشاء كسول آمن (Lazy Initialization) لسجل الرصيد `warehouse_stock` عند أول إدخال تحت التزامن.
+   - إدارة `db_debug` عبر كتلة `try/finally` لضمان استعادة الحالة الأصلية دائماً.
+   - دوال الترقيم والفلاتر: `count_movements()` و `get_movements_paged()`.
+
+3. `application/controllers/Stock_movements.php` (ملف جديد):
+   - يرث من `Auth_Controller`.
+   - `index()`: عرض السجل التاريخي للحركات مع الفلاتر والترقيم وحدود صلاحية المستودعات المخصصة لكل مستخدم. متاح للأدوار: admin, warehouse, sales.
+   - `create_in()`: تسجيل حركة إدخال مخزون جديد. متاح فقط لـ admin وَ warehouse؛ دور sales محظور تماماً.
+   - `create_adjustment()`: تسجيل تسوية مخزون (زيادة/خصم) مع إلزامية السبب وتوليد رمز Idempotency جديد لكل نموذج. محظور على sales.
+   - `ajax_get_stock()`: نقطة نهاية AJAX لجلب الرصيد اللحظي لمنتج في مستودع مع التحقق من الصلاحيات.
+
+4. `application/views/stock_movements/index.php` (ملف جديد):
+   - واجهة RTL عربية متكاملة لسجل الحركات، شريط فلاتر متقدم (بحث، مستودع، نوع الحركة، من تاريخ، إلى تاريخ)، بطاقات الحالة، وأزرار الإجراءات المشروطة بالصلاحية.
+
+5. `application/views/stock_movements/create_in.php` (ملف جديد):
+   - واجهة إدخال المخزون، اختيار المستودع والمنتج النشط، عرض الرصيد الحالي والمتوقع لحظياً عبر AJAX، وإرسال رمز Idempotency المخفي.
+
+6. `application/views/stock_movements/create_adjustment.php` (ملف جديد):
+   - واجهة تسوية المخزون، اختيار نوع التسوية (إضافة/خصم)، كمية التسوية، حقل السبب الإلزامي مع عداد أحرف لحظي، وتنبيه أحمر مع تعطيل زر الحفظ عند تجاوز الخصم للرصيد المتاح لمنع الرصيد السالب.
+
+7. `application/config/routes.php` (معدّل):
+   - تسجيل المسارات: `stock/movements`, `stock/movements/in`, `stock/movements/adjust`, `stock/movements/ajax_get_stock`.
+
+8. `application/views/layouts/main.php` (معدّل):
+   - تفعيل عنصر "حركات المخزون" في القائمة الجانبية مع وسم `F06` النشط وتوجيهه إلى `site_url('stock/movements')`.
+
+9. `database/README.md` (معدّل):
+   - توثيق مخططات F05 و F06 وقيودها المطبقة في قاعدة البيانات.
+
+### نتائج الفحوصات والاختبارات المنفذة
+
+تم تنفيذ حزمة اختبارات شاملة `test_f06_verification.php` عبر إقلاع CodeIgniter في بيئة PHP 8.2.12 مع MariaDB 10.4.32:
+
+| القسم | عدد الاختبارات | النتيجة |
+|---|---|---|
+| فحص المخطط وقيود MariaDB CHECK Constraints | 7 | ✅ 7/7 PASSED |
+| عمليات إدخال المخزون (Stock In) والإنشاء الكسول | 5 | ✅ 5/5 PASSED |
+| عمليات تسوية المخزون (Adjustment) ومنع الرصيد السالب وإلزامية السبب | 7 | ✅ 7/7 PASSED |
+| اختبارات Idempotency (إعادة الطلب Replay ومنع التكرار واكتشاف التعارض) | 5 | ✅ 5/5 PASSED |
+| التحقق الصارم من المدخلات (كسور، أرقام سالبة، أصفار، صيغة المفتاح) | 4 | ✅ 4/4 PASSED |
+| فحص استعلامات الترقيم والفلاتر وحدود المستودعات المصرح بها | 7 | ✅ 7/7 PASSED |
+| التحقق من صلاحيات الأدوار وقيود المستودعات | 3 | ✅ 3/3 PASSED |
+| تنظيف بيانات الاختبار وإعادة قاعدة البيانات لحالتها النظيفة | 1 | ✅ 1/1 PASSED |
+
+**المجموع الإجمالي:** 39 فحصاً | **الناجحة:** 39 | **الفاشلة:** 0.
+
+### التحقق من بناء جمل PHP (PHP Lint)
+تم تشغيل `php -l` على جميع الملفات المنشأة والمعدلة:
+- `application/controllers/Stock_movements.php`: No syntax errors detected.
+- `application/models/Stock_movement_model.php`: No syntax errors detected.
+- `application/views/stock_movements/index.php`: No syntax errors detected.
+- `application/views/stock_movements/create_in.php`: No syntax errors detected.
+- `application/views/stock_movements/create_adjustment.php`: No syntax errors detected.
+- `application/config/routes.php`: No syntax errors detected.
+- `application/views/layouts/main.php`: No syntax errors detected.
+
+### ما لم يُختبر / قيود البيئة الحالية
+- اختبار التفاعل البشري المباشر عبر المتصفح وجلسات HTTP المتزامنة في نفس اللحظة (تمت محاكاتها برمجياً عبر اختبارات التكرار والتعارض).
+- لم يُنفذ أي إجراء Git Commit أو Push وفقاً لقواعد المشروع.

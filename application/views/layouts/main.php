@@ -768,7 +768,7 @@
                 <?php endif; ?>
 
                 <li class="nav-item">
-                    <a href="<?php echo site_url('stock'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'stock') ? 'active' : ''; ?>">
+                    <a href="<?php echo site_url('stock'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'stock' && $this->uri->segment(2) !== 'movements') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">📊</span>
                             <span>أرصدة المخزون</span>
@@ -777,12 +777,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="javascript:void(0);" class="nav-link" style="opacity: 0.6; cursor: not-allowed;" title="الميزة F06 القادمة">
+                    <a href="<?php echo site_url('stock/movements'); ?>" class="nav-link <?php echo ($this->uri->segment(1) === 'stock' && $this->uri->segment(2) === 'movements') ? 'active' : ''; ?>">
                         <span class="nav-link-content">
                             <span class="nav-icon">🔄</span>
                             <span>حركات المخزون</span>
                         </span>
-                        <span class="nav-tag">F06</span>
+                        <span class="nav-tag nav-tag-active">F06</span>
                     </a>
                 </li>
             </ul>
